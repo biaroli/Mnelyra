@@ -119,7 +119,7 @@
     contextWorkspace = null;
     if (!workspace) return;
     const confirmed = await confirm(
-      `确定从 Codex-Web 中移除「${workspaceRootName(workspace.path)}」？\n\n不会删除磁盘中的项目文件。`,
+      `确定从 RootRelay 中移除「${workspaceRootName(workspace.path)}」？\n\n不会删除磁盘中的项目文件。`,
       {
         title: "移除工作区",
         kind: "warning",

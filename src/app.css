@@ -52,7 +52,7 @@
   --color-error: var(--danger);
 }
 
-/* ─── Codex-Web / restrained cyber tooling layer ─── */
+/* ─── RootRelay / restrained cyber tooling layer ─── */
 :root,
 [data-theme="light"] {
   --sidebar-width: 232px;
@@ -1348,7 +1348,7 @@ button {
   }
 }
 
-/* ─── Codex-Web final shell: fixed cyberpunk, Codex-like density ─── */
+/* ─── RootRelay final shell: fixed cyberpunk tooling density ─── */
 :root,
 [data-theme="light"],
 [data-theme="dark"],

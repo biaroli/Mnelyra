@@ -14,7 +14,8 @@ use super::model::{
     MemoryState, ScanReport,
 };
 
-pub const DEFAULT_HISTORY_DIR: &str = ".web-codex/history-session";
+pub const DEFAULT_HISTORY_DIR: &str = ".rootrelay/history-session";
+const LEGACY_HISTORY_DIR: &str = ".web-codex/history-session";
 const STATE_ITEM_LIMIT: usize = 12;
 const STATE_TEXT_LIMIT: usize = 512;
 const STATE_FOCUS_LIMIT: usize = 2_048;
@@ -50,7 +51,20 @@ pub fn resolve_history_dir(
         }
     }
 
-    let raw = history_dir.unwrap_or(DEFAULT_HISTORY_DIR).trim();
+    let default_dir = if workspace
+        .root()
+        .join(LEGACY_HISTORY_DIR.replace('/', std::path::MAIN_SEPARATOR_STR))
+        .is_dir()
+        && !workspace
+            .root()
+            .join(DEFAULT_HISTORY_DIR.replace('/', std::path::MAIN_SEPARATOR_STR))
+            .exists()
+    {
+        LEGACY_HISTORY_DIR
+    } else {
+        DEFAULT_HISTORY_DIR
+    };
+    let raw = history_dir.unwrap_or(default_dir).trim();
     if raw.is_empty() || workspace.reject_unsafe_text(raw).is_err() {
         return Err(WorkspaceError::path_outside_workspace());
     }
@@ -370,7 +384,7 @@ pub fn build_state(
                 .map(|entry| MemoryReference {
                     number: entry.number,
                     path: entry.path.clone(),
-                    reason: "当前 ChatGPT 会话档案".into(),
+                    reason: "当前客户端会话档案".into(),
                 })
         }),
         current_focus: truncate_text(&current_focus, STATE_FOCUS_LIMIT),

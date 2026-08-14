@@ -58,7 +58,7 @@
     <p class="page-kicker">RELEASE CHANNEL</p>
     <h2 class="page-title">更新</h2>
     <p class="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">
-      Codex-Web 直接从 GitHub Releases 获取签名更新包。发现新版后可在这里完成下载、安装与重启。
+      RootRelay 直接从 GitHub Releases 获取签名更新包。发现新版后可在这里完成下载、安装与重启。
     </p>
   </header>
 

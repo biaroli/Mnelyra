@@ -158,7 +158,7 @@
         {#if activeService === "mcp"}
           <ServicePanel
             title="MCP"
-            subtitle="当前项目根目录 · Streamable HTTP 工具运行时"
+            subtitle="当前项目根目录 Streamable HTTP 工具运行时"
             status={mcpStatus}
             statusMessage={mcpMessage}
             port={general.mcpRuntime.local_port}
@@ -172,7 +172,7 @@
         {:else}
           <ServicePanel
             title="Actions"
-            subtitle="当前项目根目录 · OpenAPI 网关"
+            subtitle="当前项目根目录 OpenAPI 网关"
             status={actionsStatus}
             statusMessage={actionsMessage}
             port={general.actions.local_port}

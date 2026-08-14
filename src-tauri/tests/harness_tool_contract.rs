@@ -1,6 +1,6 @@
 use std::fs;
 
-use web_codex_desktop_lib::tools::{call_tool, ToolContext};
+use rootrelay_lib::tools::{call_tool, ToolContext};
 use serde_json::json;
 
 #[test]
@@ -224,7 +224,7 @@ fn 外部修改会在写工具执行前被拒绝() {
 
 #[test]
 fn 工具清单包含项目状态和任务上下文能力() {
-    let tools = web_codex_desktop_lib::tools::list_tools_for_profile("advanced");
+    let tools = rootrelay_lib::tools::list_tools_for_profile("advanced");
     let names = tools
         .iter()
         .filter_map(|tool| tool["name"].as_str())

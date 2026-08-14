@@ -1,4 +1,4 @@
-name: Codex-Web Release
+name: RootRelay Release
 
 on:
   push:
@@ -54,7 +54,7 @@ jobs:
         working-directory: src-tauri
         run: cargo test --lib
 
-      - name: Build and publish Codex-Web
+      - name: Build and publish RootRelay
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -62,7 +62,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ inputs.release_tag || github.ref_name }}
-          releaseName: Codex-Web ${{ inputs.release_tag || github.ref_name }}
+          releaseName: RootRelay ${{ inputs.release_tag || github.ref_name }}
           releaseDraft: false
           prerelease: false
           generateReleaseNotes: true

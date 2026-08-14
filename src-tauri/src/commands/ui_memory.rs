@@ -163,7 +163,7 @@ pub async fn recreate_ui_webview(app: AppHandle) -> AppResult<()> {
     let new_window = match new_window {
         Ok(w) => w,
         Err(config_err) => WebviewWindowBuilder::new(&app, &label, WebviewUrl::App("index.html".into()))
-            .title("Codex-Web")
+            .title("RootRelay")
             .inner_size(1280.0, 800.0)
             .min_inner_size(960.0, 640.0)
             .build()

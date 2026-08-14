@@ -188,7 +188,7 @@
     <p class="page-kicker">全局设置</p>
     <h2 class="page-title">通用</h2>
     <p class="mt-2 max-w-3xl text-sm text-[var(--color-text-muted)]">
-      Codex-Web 全局只运行一套 MCP / Actions 配置。切换工作区只切换项目根目录，不再复制端口、隧道、策略或认证配置。
+      RootRelay 全局只运行一套 MCP / Actions 配置。切换工作区只切换项目根目录，不再复制端口、隧道、策略或认证配置。
     </p>
   </header>
 

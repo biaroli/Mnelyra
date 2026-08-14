@@ -74,9 +74,9 @@ pub fn build_openapi(tools: &[Value], public_base_url: &str, auth_type: &str) ->
     let mut document = json!({
         "openapi": "3.1.0",
         "info": {
-            "title": "Codex-Web Actions",
+            "title": "RootRelay Actions",
             "version": env!("CARGO_PKG_VERSION"),
-            "description": "Read, modify and test a workspace through Codex-Web."
+            "description": "Read, modify and test a workspace through RootRelay."
         },
         "servers": [{ "url": public_base_url.trim_end_matches('/') }],
         "paths": paths,

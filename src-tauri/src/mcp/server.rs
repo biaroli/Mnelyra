@@ -47,11 +47,11 @@ fn initialize_result() -> Value {
             "logging": {}
         },
         "serverInfo": {
-            "name": "codex-web",
-            "title": "Codex-Web",
+            "name": "rootrelay",
+            "title": "RootRelay",
             "version": env!("CARGO_PKG_VERSION")
         },
-        "instructions": "Use these tools only for local coding operations inside the configured workspace. At the start of every new ChatGPT conversation, before answering the user's first request, call history_session_bootstrap exactly once and pass the user's verbatim first request as initial_user_input. Treat bootstrap as required conversation initialization: it creates or resumes a lossless Markdown archive and returns bounded current state, not all history. Use history_session_search followed by history_session_read only when exact earlier context is needed. history_session_read returns a bounded UTF-8-safe page; follow next_cursor with the returned content hash until the relevant archive is complete. Repeated successful bootstrap calls in the same conversation resume the same session and must not create duplicates. Preserve session_key and current_path returned by bootstrap, then pass them unchanged as session_key and expected_path to every history_session_checkpoint call. After completing each user-requested task in the conversation, call history_session_checkpoint before the final response and pass that user's verbatim request as raw_user_input. Only state that progress was saved after checkpoint returns ok=true with the same session_key and path. The server cannot access ChatGPT transcript text that was not provided as a tool argument; persistence is not automatic background persistence."
+        "instructions": "Use these tools only for local coding operations inside the configured workspace. At the start of every new client conversation, before answering the user's first request, call history_session_bootstrap exactly once and pass the user's verbatim first request as initial_user_input. Treat bootstrap as required conversation initialization: it creates or resumes a lossless Markdown archive and returns bounded current state, not all history. Use history_session_search followed by history_session_read only when exact earlier context is needed. history_session_read returns a bounded UTF-8-safe page; follow next_cursor with the returned content hash until the relevant archive is complete. Repeated successful bootstrap calls in the same conversation resume the same session and must not create duplicates. Preserve session_key and current_path returned by bootstrap, then pass them unchanged as session_key and expected_path to every history_session_checkpoint call. After completing each user-requested task in the conversation, call history_session_checkpoint before the final response and pass that user's verbatim request as raw_user_input. Only state that progress was saved after checkpoint returns ok=true with the same session_key and path. The server cannot access client transcript text that was not provided as a tool argument; persistence is not automatic background persistence."
     })
 }
 
@@ -130,7 +130,7 @@ mod tests {
         let initialized = initialize_result();
         let instructions = initialized["instructions"].as_str().expect("instructions");
         assert!(instructions.contains("history_session_bootstrap"));
-        assert!(instructions.contains("At the start of every new ChatGPT conversation"));
+        assert!(instructions.contains("At the start of every new client conversation"));
         assert!(instructions.contains("before answering the user's first request"));
         assert!(instructions.contains("required conversation initialization"));
         assert!(instructions.contains("initial_user_input"));
@@ -199,7 +199,7 @@ mod tests {
         assert_eq!(structured["session_key_source"], "platform_conversation_id");
         assert_eq!(structured["session_key"], "chatgpt-session");
         assert_eq!(structured["initial_input_captured"], true);
-        let content = fs::read_to_string(workspace.path().join(".web-codex/history-session/1.md"))
+        let content = fs::read_to_string(workspace.path().join(".rootrelay/history-session/1.md"))
             .expect("read history file");
         assert!(content.contains("**Session key:** chatgpt-session"));
         assert!(!content.contains("**Session key:** explicit-session"));

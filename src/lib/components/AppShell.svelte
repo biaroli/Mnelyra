@@ -30,7 +30,7 @@
       <div class="tx-brand-row">
         <div class="tx-brand-copy">
           <span class="tx-brand-dot" aria-hidden="true"></span>
-          <h1 class="tx-brand-title">Codex-Web</h1>
+          <h1 class="tx-brand-title">RootRelay</h1>
         </div>
         <span class="tx-app-version">v{APP_VERSION}</span>
       </div>
@@ -68,5 +68,5 @@
 </div>
 
 <svelte:head>
-  <title>Codex-Web</title>
+  <title>RootRelay</title>
 </svelte:head>

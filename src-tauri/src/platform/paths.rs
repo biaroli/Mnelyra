@@ -1,5 +1,23 @@
 use std::env;
+use std::fs;
 use std::path::{Path, PathBuf};
+
+const APP_DIR: &str = "rootrelay";
+const LEGACY_APP_DIR: &str = "web-codex-desktop";
+
+pub fn app_config_dir(base: impl AsRef<Path>) -> PathBuf {
+    let base = base.as_ref();
+    let current = base.join(APP_DIR);
+    if current.exists() {
+        return current;
+    }
+
+    let legacy = base.join(LEGACY_APP_DIR);
+    if legacy.exists() && fs::rename(&legacy, &current).is_err() {
+        return legacy;
+    }
+    current
+}
 
 pub fn resolve_from_path(name: &str) -> Option<PathBuf> {
     let path_var = env::var_os("PATH")?;

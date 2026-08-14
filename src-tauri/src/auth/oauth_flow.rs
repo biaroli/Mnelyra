@@ -394,7 +394,7 @@ fn login_page(
         input{{width:100%;padding:.5rem;margin:.4rem 0;box-sizing:border-box}}\
         button{{width:100%;padding:.7rem;background:#0066cc;color:#fff;border:none;cursor:pointer}}</style>\
         </head><body>\
-        <h2>Authorize Codex-Web</h2>\
+        <h2>Authorize RootRelay</h2>\
         {workspace_block}\
         <p>Client: <strong>{}</strong></p>\
         <p>Redirect URI: <code>{}</code></p>\

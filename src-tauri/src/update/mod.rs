@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 use crate::error::{AppError, AppResult};
 use crate::settings::AppSettings;
 
-pub const REPO_URL: &str = "https://github.com/biaroli/Codex-Web";
-pub const RELEASES_LATEST_URL: &str = "https://github.com/biaroli/Codex-Web/releases/latest";
+pub const REPO_URL: &str = "https://github.com/biaroli/RootRelay";
+pub const RELEASES_LATEST_URL: &str = "https://github.com/biaroli/RootRelay/releases/latest";
 pub const RELEASES_API_URL: &str =
-    "https://api.github.com/repos/biaroli/Codex-Web/releases/latest";
+    "https://api.github.com/repos/biaroli/RootRelay/releases/latest";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,7 +100,7 @@ fn build_update_client() -> AppResult<reqwest::Client> {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
         .user_agent(format!(
-            "Codex-Web/{} (+{})",
+            "RootRelay/{} (+{})",
             current_app_version(),
             REPO_URL
         ))
@@ -164,7 +164,7 @@ mod tests {
     fn parse_latest_detects_newer_release() {
         let body = r#"{
             "tag_name": "v0.1.99",
-            "html_url": "https://github.com/biaroli/Codex-Web/releases/tag/v0.1.99"
+            "html_url": "https://github.com/biaroli/RootRelay/releases/tag/v0.1.99"
         }"#;
         let result = parse_latest_release(body, "0.1.23").expect("parse");
         assert!(result.update_available);
@@ -177,7 +177,7 @@ mod tests {
     fn parse_latest_reports_up_to_date() {
         let body = r#"{
             "tag_name": "v0.1.23",
-            "html_url": "https://github.com/biaroli/Codex-Web/releases/tag/v0.1.23"
+            "html_url": "https://github.com/biaroli/RootRelay/releases/tag/v0.1.23"
         }"#;
         let result = parse_latest_release(body, "0.1.23").expect("parse");
         assert!(!result.update_available);

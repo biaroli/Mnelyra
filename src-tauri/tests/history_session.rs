@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::{Arc, Barrier};
 
-use web_codex_desktop_lib::tools::{list_tools_for_profile, ToolContext};
+use rootrelay_lib::tools::{list_tools_for_profile, ToolContext};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 

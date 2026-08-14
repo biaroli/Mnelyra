@@ -322,9 +322,9 @@ fn random_secret() -> String {
 
 fn shared_value_for_key(key: &str) -> String {
     if key == "oauth_client_id" {
-        format!("chatgpt-client-{}", &uuid::Uuid::new_v4().to_string()[..12])
+        format!("rootrelay-client-{}", &uuid::Uuid::new_v4().to_string()[..12])
     } else if key == "actions_oauth_client_id" {
-        format!("chatgpt-actions-{}", &uuid::Uuid::new_v4().to_string()[..12])
+        format!("rootrelay-actions-{}", &uuid::Uuid::new_v4().to_string()[..12])
     } else {
         random_secret()
     }
@@ -351,7 +351,7 @@ mod tests {
     #[test]
     fn shared_oauth_client_id_uses_client_id_format() {
         let value = shared_value_for_key("oauth_client_id");
-        assert!(value.starts_with("chatgpt-client-"));
-        assert_eq!(value.len(), "chatgpt-client-".len() + 12);
+        assert!(value.starts_with("rootrelay-client-"));
+        assert_eq!(value.len(), "rootrelay-client-".len() + 12);
     }
 }

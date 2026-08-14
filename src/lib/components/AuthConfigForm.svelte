@@ -208,7 +208,7 @@
       <span class="text-xs text-[var(--color-text-muted)]">授权口令</span>
       <SecretInput
         value={secrets.oauth_password ?? ""}
-        placeholder="ChatGPT 首次授权时输入这个口令"
+        placeholder="客户端首次 OAuth 授权时输入这个口令"
         readonly
         onRegenerate={() => void regenerate("oauth_password")}
         regenerating={regenerating === "oauth_password"}

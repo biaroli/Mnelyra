@@ -171,7 +171,7 @@ async fn mcp_discovery() -> Response {
 
 fn mcp_discovery_payload() -> Value {
     json!({
-        "name": "codex-web",
+        "name": "rootrelay",
         "version": env!("CARGO_PKG_VERSION"),
         "protocolVersion": "2025-06-18"
     })

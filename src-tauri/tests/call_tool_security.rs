@@ -168,8 +168,8 @@ fn exec_command_rejects_disallowed_destructive_command() {
 
 #[test]
 fn dangerous_command_requires_explicit_confirmation() {
-    let policy = web_codex_desktop_lib::tools::policy::PolicySettings::default();
-    let accepted = web_codex_desktop_lib::tools::policy::validate_tool_arguments(
+    let policy = rootrelay_lib::tools::policy::PolicySettings::default();
+    let accepted = rootrelay_lib::tools::policy::validate_tool_arguments(
         "exec_command",
         &json!({"cmd": "git reset --hard HEAD", "confirm": true}),
         &policy,
@@ -228,8 +228,8 @@ fn patch_check_rejects_all_git_and_github_writes() {
 
 #[test]
 fn destructive_command_targeting_git_is_always_rejected() {
-    let policy = web_codex_desktop_lib::tools::policy::PolicySettings::default();
-    let error = web_codex_desktop_lib::tools::policy::validate_tool_arguments(
+    let policy = rootrelay_lib::tools::policy::PolicySettings::default();
+    let error = rootrelay_lib::tools::policy::validate_tool_arguments(
         "exec_command",
         &json!({"cmd": "rm -rf .git", "confirm": true}),
         &policy,
@@ -240,8 +240,8 @@ fn destructive_command_targeting_git_is_always_rejected() {
 
 #[test]
 fn interpreter_command_cannot_delete_git_assets() {
-    let policy = web_codex_desktop_lib::tools::policy::PolicySettings::default();
-    let error = web_codex_desktop_lib::tools::policy::validate_tool_arguments(
+    let policy = rootrelay_lib::tools::policy::PolicySettings::default();
+    let error = rootrelay_lib::tools::policy::validate_tool_arguments(
         "exec_command",
         &json!({
             "cmd": "python -c \"import shutil; shutil.rmtree('.git')\"",
@@ -255,8 +255,8 @@ fn interpreter_command_cannot_delete_git_assets() {
 
 #[test]
 fn interpreter_command_cannot_delete_github_assets() {
-    let policy = web_codex_desktop_lib::tools::policy::PolicySettings::default();
-    let error = web_codex_desktop_lib::tools::policy::validate_tool_arguments(
+    let policy = rootrelay_lib::tools::policy::PolicySettings::default();
+    let error = rootrelay_lib::tools::policy::validate_tool_arguments(
         "exec_command",
         &json!({
             "cmd": "python -c \"import os; os.remove('.github/workflows/ci.yml')\"",
@@ -270,8 +270,8 @@ fn interpreter_command_cannot_delete_github_assets() {
 
 #[test]
 fn interpreter_command_cannot_write_outside_workspace_scope() {
-    let policy = web_codex_desktop_lib::tools::policy::PolicySettings::default();
-    let error = web_codex_desktop_lib::tools::policy::validate_tool_arguments(
+    let policy = rootrelay_lib::tools::policy::PolicySettings::default();
+    let error = rootrelay_lib::tools::policy::validate_tool_arguments(
         "exec_command",
         &json!({
             "cmd": "python -c \"from pathlib import Path; Path('../outside.txt').write_text('x')\"",
@@ -285,8 +285,8 @@ fn interpreter_command_cannot_write_outside_workspace_scope() {
 
 #[test]
 fn interpreter_command_cannot_write_git_files() {
-    let policy = web_codex_desktop_lib::tools::policy::PolicySettings::default();
-    let error = web_codex_desktop_lib::tools::policy::validate_tool_arguments(
+    let policy = rootrelay_lib::tools::policy::PolicySettings::default();
+    let error = rootrelay_lib::tools::policy::validate_tool_arguments(
         "exec_command",
         &json!({
             "cmd": "python -c \"from pathlib import Path; Path('.git/config').write_text('x')\"",
@@ -350,8 +350,8 @@ fn apply_patch_rejects_absolute_path_target() {
 
 #[test]
 fn exec_command_allows_python_c_but_rejects_shell_escape() {
-    let policy = web_codex_desktop_lib::tools::policy::PolicySettings::default();
-    assert!(web_codex_desktop_lib::tools::policy::validate_tool_arguments(
+    let policy = rootrelay_lib::tools::policy::PolicySettings::default();
+    assert!(rootrelay_lib::tools::policy::validate_tool_arguments(
         "exec_command",
         &json!({"cmd": "python -c \"import os; print(os.getcwd())\""}),
         &policy,
@@ -370,11 +370,11 @@ fn exec_command_rejects_shell_chaining() {
 
 #[test]
 fn safe_permission_mode_blocks_network_looking_command() {
-    let policy = web_codex_desktop_lib::tools::policy::PolicySettings {
+    let policy = rootrelay_lib::tools::policy::PolicySettings {
         permission_mode: "safe".into(),
         ..Default::default()
     };
-    let err = web_codex_desktop_lib::tools::policy::validate_tool_arguments(
+    let err = rootrelay_lib::tools::policy::validate_tool_arguments(
         "exec_command",
         &json!({"cmd": "curl https://example.com"}),
         &policy,

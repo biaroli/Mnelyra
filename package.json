@@ -1,7 +1,7 @@
 {
-  "name": "web-codex-desktop",
+  "name": "rootrelay",
   "version": "0.1.0",
-  "description": "Desktop MCP workspace server for coding agents",
+  "description": "Desktop MCP workspace relay for MCP-compatible clients",
   "author": "biaroli",
   "type": "module",
   "scripts": {

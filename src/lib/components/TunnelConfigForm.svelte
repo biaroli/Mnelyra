@@ -181,7 +181,7 @@
         <option value="">手动填写（旧版）</option>
         {#each frpProfiles as profile (profile.id)}
           <option value={profile.id}>
-            {profile.name} · {profile.server}:{profile.serverPort}
+            {profile.name} {profile.server}:{profile.serverPort}
           </option>
         {/each}
       </select>

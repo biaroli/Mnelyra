@@ -19,7 +19,7 @@ impl Platform for LinuxPlatform {
         let base = dirs::config_dir()
             .or_else(dirs::home_dir)
             .ok_or_else(|| crate::error::AppError::Message("config dir not found".into()))?;
-        Ok(base.join("web-codex-desktop"))
+        Ok(shared_paths::app_config_dir(base))
     }
 
     fn find_pid_listening_on_port(&self, port: u16) -> AppResult<Option<u32>> {

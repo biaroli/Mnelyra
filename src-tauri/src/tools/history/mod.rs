@@ -737,7 +737,7 @@ fn resolve_session_key(args: &Value) -> WorkspaceResult<(String, &'static str)> 
     }
     Err(history_error(
         "SESSION_ID_UNAVAILABLE",
-        "A stable ChatGPT session identifier is required.",
+        "A stable client session identifier is required.",
         "validation",
         false,
         json!({}),

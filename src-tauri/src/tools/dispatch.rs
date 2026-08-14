@@ -386,8 +386,8 @@ fn filter_exposed_actions(ctx: &ToolContext, actions: Vec<String>) -> Vec<String
 pub fn server_info(ctx: &ToolContext) -> Result<Value, WorkspaceError> {
     let tools = crate::tools::registry::exposed_tool_names(&ctx.tool_profile);
     Ok(tool_ok(json!({
-        "server": "codex-web",
-        "title": "Codex-Web",
+        "server": "rootrelay",
+        "title": "RootRelay",
         "version": env!("CARGO_PKG_VERSION"),
         "protocol_version": "2025-06-18",
         "workspace": ctx.workspace.root_display(),

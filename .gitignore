@@ -20,8 +20,10 @@ src-tauri/icons/ios/
 src-tauri/icons/icons/
 src-tauri/icons/logo-design.png
 
+.rootrelay/
 .web-codex/
 tmp-run
 
-# 本地聊天记录 / 开发历史，不提交到 Git
-docs/
+# 本地聊天记录 / 开发历史由 .rootrelay / .web-codex 忽略；docs/ 用于项目维护文档。
+docs/.mcp-probe/
+docs/history-session/

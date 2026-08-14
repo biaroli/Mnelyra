@@ -1,12 +1,12 @@
 [package]
-name = "web-codex-desktop"
+name = "rootrelay"
 version = "0.1.0"
-description = "Desktop MCP workspace server for coding agents"
+description = "Desktop MCP workspace relay for MCP-compatible clients"
 authors = ["biaroli"]
 edition = "2021"
 
 [lib]
-name = "web_codex_desktop_lib"
+name = "rootrelay_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

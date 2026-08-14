@@ -271,7 +271,7 @@ impl RuntimeSupervisor {
                     }
                 }
                 // MCP OAuth matches legacy Python: client_secret is optional.
-                // ChatGPT connectors use PKCE only and do not send client_secret.
+                // PKCE-only MCP clients do not send client_secret.
                 let oauth_client_secret = None;
                 let oauth_password = if profile.auth.oauth_enabled() {
                     resolve_secret(&profile.id, "oauth_password", use_shared)?

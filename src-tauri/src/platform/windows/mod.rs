@@ -16,7 +16,7 @@ impl Platform for WindowsPlatform {
     }
 
     fn app_config_dir(&self) -> AppResult<PathBuf> {
-        paths::roaming_app_data().map(|dir| dir.join("web-codex-desktop"))
+        paths::roaming_app_data().map(shared_paths::app_config_dir)
     }
 
     fn find_pid_listening_on_port(&self, port: u16) -> AppResult<Option<u32>> {

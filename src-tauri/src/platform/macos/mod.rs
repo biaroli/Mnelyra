@@ -18,10 +18,9 @@ impl Platform for MacPlatform {
     fn app_config_dir(&self) -> AppResult<PathBuf> {
         let base = dirs::home_dir()
             .ok_or_else(|| crate::error::AppError::Message("home dir not found".into()))?;
-        Ok(base
-            .join("Library")
-            .join("Application Support")
-            .join("web-codex-desktop"))
+        Ok(shared_paths::app_config_dir(
+            base.join("Library").join("Application Support"),
+        ))
     }
 
     fn find_pid_listening_on_port(&self, port: u16) -> AppResult<Option<u32>> {

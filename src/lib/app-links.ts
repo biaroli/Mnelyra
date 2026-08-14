@@ -1,4 +1,4 @@
-/** Canonical public links for Codex-Web. */
-export const REPO_URL = "https://github.com/biaroli/Codex-Web";
+/** Canonical public links for RootRelay. */
+export const REPO_URL = "https://github.com/biaroli/RootRelay";
 export const RELEASES_LATEST_URL =
-  "https://github.com/biaroli/Codex-Web/releases/latest";
+  "https://github.com/biaroli/RootRelay/releases/latest";

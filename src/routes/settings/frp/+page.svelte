@@ -88,7 +88,7 @@
     <p class="page-kicker">全局设置</p>
     <h2 class="page-title">FRP 配置</h2>
     <p class="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">
-      在此维护可复用的 FRP 服务器、端口与 Token。实际启用哪一条配置以及全局子域名，在「通用」中统一选择。
+      在此维护可复用的 FRP 服务器、端口与 Token。实际启用哪一条配置以及全局子域名，在通用中统一选择。
     </p>
   </header>
 
@@ -177,7 +177,7 @@
                 <p class="truncate text-sm font-medium">{profile.name}</p>
                 <p class="truncate font-mono text-xs text-[var(--color-text-muted)]">
                   {profile.server}:{profile.serverPort}
-                  · Token {profile.hasToken ? "已配置" : "未配置"}
+                  Token {profile.hasToken ? "已配置" : "未配置"}
                 </p>
               </div>
               <div class="flex shrink-0 gap-2">

@@ -513,7 +513,8 @@ pub(crate) fn classify_public_mcp_body(status: u16, body: &str) -> PublicMcpProb
         return PublicMcpProbe::FrpNotRouted;
     }
     if status == 200
-        && (lower.contains("codex-web")
+        && (lower.contains("rootrelay")
+            || lower.contains("codex-web")
             || lower.contains("web-codex")
             || lower.contains("protocolversion")
             || lower.contains("\"name\""))
@@ -958,7 +959,7 @@ mod tests {
         assert_eq!(
             classify_public_mcp_body(
                 200,
-                r#"{"name":"codex-web","protocolVersion":"2025-06-18"}"#
+                r#"{"name":"rootrelay","protocolVersion":"2025-06-18"}"#
             ),
             PublicMcpProbe::Healthy
         );

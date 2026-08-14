@@ -40,7 +40,12 @@ impl Harness {
         let root = dirs::data_local_dir()
             .or_else(dirs::data_dir)
             .ok_or_else(|| HarnessError::new("STORE_UNAVAILABLE", "无法确定应用数据目录"))?;
-        Ok(root.join("web-codex").join("workspace-state"))
+        let current = root.join("rootrelay").join("workspace-state");
+        if current.exists() {
+            return Ok(current);
+        }
+        let legacy = root.join("web-codex").join("workspace-state");
+        Ok(if legacy.exists() { legacy } else { current })
     }
 
     pub fn workspace_id(&self) -> &str {

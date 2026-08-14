@@ -238,7 +238,7 @@ async fn health(State(state): State<AppState>) -> Json<Value> {
 
     Json(json!({
         "ok": true,
-        "service": "codex-web-actions",
+        "service": "rootrelay-actions",
         "workspace": state.workspace_path,
         "auth_type": state.auth.auth_type,
         "tools_loaded": tools_loaded
@@ -255,7 +255,7 @@ async fn privacy() -> Html<&'static str> {
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8">
-    <title>Codex-Web Actions Privacy</title>
+    <title>RootRelay Actions Privacy</title>
   </head>
   <body>
     <h1>隐私政策</h1>

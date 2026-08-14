@@ -28,7 +28,7 @@ pub const P0_TOOLS: &[(&str, &str, &str, bool, bool, bool)] = &[
     (
         "history_session_bootstrap",
         "Initialize or restore development session",
-        "At the start of every new ChatGPT conversation, call this exactly once before the first response and pass the user's verbatim initial_user_input. It creates or resumes a lossless archive, then returns bounded current state and search/read guidance rather than all history.",
+        "At the start of every new client conversation, call this exactly once before the first response and pass the user's verbatim initial_user_input. It creates or resumes a lossless archive, then returns bounded current state and search/read guidance rather than all history.",
         false,
         false,
         false,
@@ -36,7 +36,7 @@ pub const P0_TOOLS: &[(&str, &str, &str, bool, bool, bool)] = &[
     (
         "history_session_checkpoint",
         "Save development checkpoint",
-        "Append an idempotent, redacted development checkpoint. Pass session_key and expected_path exactly as returned by history_session_bootstrap, plus the user's verbatim raw_user_input; the server cannot read ChatGPT transcripts that were not passed as arguments. Changed content for the same turn_id is preserved as a revision.",
+        "Append an idempotent, redacted development checkpoint. Pass session_key and expected_path exactly as returned by history_session_bootstrap, plus the user's verbatim raw_user_input; the server cannot read client transcript text that was not passed as arguments. Changed content for the same turn_id is preserved as a revision.",
         false,
         false,
         false,
@@ -525,7 +525,7 @@ pub fn input_schema(name: &str) -> Value {
                 "session_key": { "type": "string", "minLength": 1 },
                 "title": { "type": "string" },
                 "initial_user_input": { "type": "string" },
-                "history_dir": { "type": "string", "default": ".web-codex/history-session" },
+                "history_dir": { "type": "string", "default": ".rootrelay/history-session" },
                 "create_if_missing": { "type": "boolean", "default": true }
             },
             "additionalProperties": false
@@ -537,7 +537,7 @@ pub fn input_schema(name: &str) -> Value {
                 "workspace_root": { "type": "string", "minLength": 1 },
                 "session_key": { "type": "string", "minLength": 1 },
                 "expected_path": { "type": "string", "minLength": 1 },
-                "history_dir": { "type": "string", "default": ".web-codex/history-session" },
+                "history_dir": { "type": "string", "default": ".rootrelay/history-session" },
                 "turn_id": { "type": "string", "minLength": 1 },
                 "timestamp": { "type": "string" },
                 "user_intent": { "type": "string" },
@@ -557,7 +557,7 @@ pub fn input_schema(name: &str) -> Value {
             "type": "object",
             "properties": {
                 "workspace_root": { "type": "string", "minLength": 1 },
-                "history_dir": { "type": "string", "default": ".web-codex/history-session" },
+                "history_dir": { "type": "string", "default": ".rootrelay/history-session" },
                 "repair": { "type": "boolean", "default": false }
             },
             "additionalProperties": false
@@ -566,7 +566,7 @@ pub fn input_schema(name: &str) -> Value {
             "type": "object",
             "properties": {
                 "workspace_root": { "type": "string", "minLength": 1 },
-                "history_dir": { "type": "string", "default": ".web-codex/history-session" },
+                "history_dir": { "type": "string", "default": ".rootrelay/history-session" },
                 "query": { "type": "string", "default": "" },
                 "cursor": { "type": "integer", "minimum": 0, "default": 0 },
                 "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 }
@@ -577,7 +577,7 @@ pub fn input_schema(name: &str) -> Value {
             "type": "object",
             "properties": {
                 "workspace_root": { "type": "string", "minLength": 1 },
-                "history_dir": { "type": "string", "default": ".web-codex/history-session" },
+                "history_dir": { "type": "string", "default": ".rootrelay/history-session" },
                 "number": { "type": "integer", "minimum": 1 },
                 "path": { "type": "string", "minLength": 1 },
                 "cursor": { "type": "integer", "minimum": 0, "default": 0 },
@@ -923,7 +923,7 @@ mod tests {
     use super::{input_schema, list_tools_for_profile};
 
     #[test]
-    fn core_catalog_exposes_26_chatgpt_compatible_tools() {
+    fn core_catalog_exposes_26_mcp_compatible_tools() {
         let tools = list_tools_for_profile("core");
         let names: Vec<_> = tools
             .iter()

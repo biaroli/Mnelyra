@@ -121,7 +121,7 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
 
     let mut builder = TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
-        .tooltip("Codex-Web")
+        .tooltip("RootRelay")
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
                 let _ = commands::window_chrome::show_main_window(app.clone());
@@ -166,7 +166,7 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let state = app_handle.state::<AppState>();
                 // Prioritize the component required by the active MCP tunnel so
-                // ChatGPT comes back online as soon as possible. The other tunnel
+                // MCP clients come back online as soon as possible. The other tunnel
                 // client is filled in afterwards and must never block MCP startup.
                 let required_kind = state
                     .with_settings(|store| {

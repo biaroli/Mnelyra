@@ -5,7 +5,7 @@
   <rect x="24" y="24" width="300" height="852" rx="20" fill="#111419" stroke="#252A31"/>
   <circle cx="64" cy="68" r="18" fill="#F2F4F7"/>
   <path d="M55 68H73M64 59V77" stroke="#111419" stroke-width="3" stroke-linecap="round"/>
-  <text x="96" y="76" fill="#F5F7FA" font-family="Inter, Segoe UI, sans-serif" font-size="26" font-weight="700">Codex-Web</text>
+  <text x="96" y="76" fill="#F5F7FA" font-family="Inter, Segoe UI, sans-serif" font-size="26" font-weight="700">RootRelay</text>
 
   <text x="48" y="132" fill="#727986" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="700" letter-spacing="2">WORKSPACES</text>
   <rect x="40" y="152" width="268" height="58" rx="12" fill="#1A1F26" stroke="#343B45"/>
@@ -66,7 +66,7 @@
   <text x="650" y="675" fill="#DDE2E8" font-family="Inter, Segoe UI, sans-serif" font-size="14">Cloudflare Named Tunnel / FRP</text>
   <circle cx="1308" cy="670" r="6" fill="#48C78E"/>
   <text x="420" y="723" fill="#858D99" font-family="Inter, Segoe UI, sans-serif" font-size="13">History</text>
-  <text x="650" y="723" fill="#DDE2E8" font-family="JetBrains Mono, Consolas, monospace" font-size="14">.web-codex/history-session/</text>
+  <text x="650" y="723" fill="#DDE2E8" font-family="JetBrains Mono, Consolas, monospace" font-size="14">.rootrelay/history-session/</text>
   <circle cx="1308" cy="718" r="6" fill="#48C78E"/>
   <text x="420" y="765" fill="#69717C" font-family="Inter, Segoe UI, sans-serif" font-size="12">示意图使用虚构路径、域名与项目名，不含本机配置或密钥。</text>
 </svg>

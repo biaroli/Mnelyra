@@ -12,9 +12,13 @@ pub fn is_own_process(pid: u32) -> bool {
 }
 
 #[cfg(any(target_os = "macos", test))]
-const DESKTOP_EXECUTABLE_NAME: &str = "web-codex-desktop";
+const DESKTOP_EXECUTABLE_NAME: &str = "rootrelay";
 #[cfg(any(target_os = "macos", test))]
 const DESKTOP_BUNDLE_ID: &str = "io.github.biaroli.webcodex";
+#[cfg(any(target_os = "macos", test))]
+const LEGACY_DESKTOP_EXECUTABLE_NAME: &str = "web-codex-desktop";
+#[cfg(any(target_os = "macos", test))]
+const LEGACY_DESKTOP_BUNDLE_ID: &str = "io.github.biaroli.webcodex";
 
 /// Reclaim a port only when it belongs to an older macOS instance of this app.
 ///
@@ -57,9 +61,7 @@ pub fn try_reclaim_previous_macos_app_port(port: u16) -> bool {
 
 #[cfg(any(target_os = "macos", test))]
 fn is_managed_macos_desktop_executable(image: &Path) -> bool {
-    if image.file_name().and_then(|name| name.to_str()) != Some(DESKTOP_EXECUTABLE_NAME) {
-        return false;
-    }
+    let executable_name = image.file_name().and_then(|name| name.to_str());
 
     let Some(bundle) = image
         .ancestors()
@@ -67,7 +69,12 @@ fn is_managed_macos_desktop_executable(image: &Path) -> bool {
     else {
         return false;
     };
-    if bundle.file_name().and_then(|name| name.to_str()) != Some("Codex-Web.app")
+    let bundle_name = bundle.file_name().and_then(|name| name.to_str());
+    let current_identity = executable_name == Some(DESKTOP_EXECUTABLE_NAME)
+        && bundle_name == Some("RootRelay.app");
+    let legacy_identity = executable_name == Some(LEGACY_DESKTOP_EXECUTABLE_NAME)
+        && bundle_name == Some("Codex-Web.app");
+    if (!current_identity && !legacy_identity)
         || !image.starts_with(bundle.join("Contents").join("MacOS"))
     {
         return false;
@@ -76,9 +83,14 @@ fn is_managed_macos_desktop_executable(image: &Path) -> bool {
     let Ok(info_plist) = std::fs::read_to_string(bundle.join("Contents").join("Info.plist")) else {
         return false;
     };
+    let expected_bundle_id = if current_identity {
+        DESKTOP_BUNDLE_ID
+    } else {
+        LEGACY_DESKTOP_BUNDLE_ID
+    };
     let pattern = format!(
         r"(?s)<key>\s*CFBundleIdentifier\s*</key>\s*<string>\s*{}\s*</string>",
-        regex::escape(DESKTOP_BUNDLE_ID)
+        regex::escape(expected_bundle_id)
     );
     regex::Regex::new(&pattern)
         .map(|regex| regex.is_match(&info_plist))
@@ -227,10 +239,15 @@ mod tests {
 
     use super::*;
 
-    fn write_bundle(root: &std::path::Path, identifier: &str) -> std::path::PathBuf {
-        let bundle = root.join("Codex-Web.app");
+    fn write_bundle(
+        root: &std::path::Path,
+        bundle_name: &str,
+        executable_name: &str,
+        identifier: &str,
+    ) -> std::path::PathBuf {
+        let bundle = root.join(bundle_name);
         let contents = bundle.join("Contents");
-        let executable = contents.join("MacOS/web-codex-desktop");
+        let executable = contents.join("MacOS").join(executable_name);
         fs::create_dir_all(executable.parent().expect("MacOS dir")).expect("create bundle");
         fs::write(
             contents.join("Info.plist"),
@@ -244,9 +261,27 @@ mod tests {
     }
 
     #[test]
-    fn recognizes_a_previous_web_codex_macos_bundle() {
+    fn recognizes_current_rootrelay_macos_bundle() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let executable = write_bundle(temp.path(), "io.github.biaroli.webcodex");
+        let executable = write_bundle(
+            temp.path(),
+            "RootRelay.app",
+            "rootrelay",
+            "io.github.biaroli.webcodex",
+        );
+
+        assert!(is_managed_macos_desktop_executable(&executable));
+    }
+
+    #[test]
+    fn recognizes_legacy_codex_web_macos_bundle() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let executable = write_bundle(
+            temp.path(),
+            "Codex-Web.app",
+            "web-codex-desktop",
+            "io.github.biaroli.webcodex",
+        );
 
         assert!(is_managed_macos_desktop_executable(&executable));
     }
@@ -254,7 +289,12 @@ mod tests {
     #[test]
     fn rejects_a_different_macos_bundle_identifier() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let executable = write_bundle(temp.path(), "com.example.other-app");
+        let executable = write_bundle(
+            temp.path(),
+            "RootRelay.app",
+            "rootrelay",
+            "com.example.other-app",
+        );
 
         assert!(!is_managed_macos_desktop_executable(&executable));
     }
@@ -262,10 +302,15 @@ mod tests {
     #[test]
     fn rejects_a_matching_identifier_from_a_different_app_bundle() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let executable = write_bundle(temp.path(), "io.github.biaroli.webcodex");
+        let executable = write_bundle(
+            temp.path(),
+            "RootRelay.app",
+            "rootrelay",
+            "io.github.biaroli.webcodex",
+        );
         let other = temp
             .path()
-            .join("Other.app/Contents/MacOS/web-codex-desktop");
+            .join("Other.app/Contents/MacOS/rootrelay");
         fs::create_dir_all(other.parent().expect("MacOS dir")).expect("create other bundle");
         fs::copy(
             executable

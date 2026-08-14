@@ -23,10 +23,10 @@
       key: "oauth_client_id",
       label: "OAuth Client ID",
       stableId: true,
-      hint: "Codex-Web 首次安装时确定，此后整个安装生命周期固定。",
+      hint: "RootRelay 首次安装时确定，此后整个安装生命周期固定。",
     },
     { key: "oauth_client_secret", label: "OAuth Client Secret" },
-    { key: "oauth_password", label: "授权口令", hint: "ChatGPT 首次 OAuth 授权时输入" },
+    { key: "oauth_password", label: "授权口令", hint: "客户端首次 OAuth 授权时输入" },
     { key: "oauth_token_secret", label: "OAuth Token Secret" },
     { key: "bearer_token", label: "Bearer Token" },
   ];
@@ -159,7 +159,7 @@
                 <div class="flex items-center justify-between gap-3">
                   <span class="text-xs text-[var(--color-text-muted)]">{row.label}</span>
                   {#if row.stableId}
-                    <span class="text-[11px] text-[var(--color-text-muted)]">固定身份 · 不可轮换</span>
+                    <span class="text-[11px] text-[var(--color-text-muted)]">固定身份 不可轮换</span>
                   {/if}
                 </div>
                 <SecretInput
@@ -212,7 +212,7 @@
                 <div class="flex items-center justify-between gap-3">
                   <span class="text-xs text-[var(--color-text-muted)]">{row.label}</span>
                   {#if row.stableId}
-                    <span class="text-[11px] text-[var(--color-text-muted)]">固定身份 · 不可轮换</span>
+                    <span class="text-[11px] text-[var(--color-text-muted)]">固定身份 不可轮换</span>
                   {/if}
                 </div>
                 <SecretInput
