@@ -1,0 +1,72 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1440" height="900" rx="28" fill="#0B0D10"/>
+  <rect x="1" y="1" width="1438" height="898" rx="27" stroke="#2A2F37"/>
+
+  <rect x="24" y="24" width="300" height="852" rx="20" fill="#111419" stroke="#252A31"/>
+  <circle cx="64" cy="68" r="18" fill="#F2F4F7"/>
+  <path d="M55 68H73M64 59V77" stroke="#111419" stroke-width="3" stroke-linecap="round"/>
+  <text x="96" y="76" fill="#F5F7FA" font-family="Inter, Segoe UI, sans-serif" font-size="26" font-weight="700">Codex-Web</text>
+
+  <text x="48" y="132" fill="#727986" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="700" letter-spacing="2">WORKSPACES</text>
+  <rect x="40" y="152" width="268" height="58" rx="12" fill="#1A1F26" stroke="#343B45"/>
+  <circle cx="62" cy="181" r="5" fill="#48C78E"/>
+  <text x="80" y="187" fill="#F1F4F8" font-family="Inter, Segoe UI, sans-serif" font-size="16" font-weight="600">web-client</text>
+  <rect x="40" y="220" width="268" height="58" rx="12" fill="#111419"/>
+  <circle cx="62" cy="249" r="5" fill="#626A76"/>
+  <text x="80" y="255" fill="#B8BEC8" font-family="Inter, Segoe UI, sans-serif" font-size="16">api-service</text>
+  <rect x="40" y="288" width="268" height="58" rx="12" fill="#111419"/>
+  <circle cx="62" cy="317" r="5" fill="#626A76"/>
+  <text x="80" y="323" fill="#B8BEC8" font-family="Inter, Segoe UI, sans-serif" font-size="16">desktop-app</text>
+
+  <text x="48" y="400" fill="#727986" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="700" letter-spacing="2">SETTINGS</text>
+  <text x="56" y="445" fill="#B8BEC8" font-family="Inter, Segoe UI, sans-serif" font-size="15">通用</text>
+  <text x="56" y="487" fill="#B8BEC8" font-family="Inter, Segoe UI, sans-serif" font-size="15">认证</text>
+  <text x="56" y="529" fill="#B8BEC8" font-family="Inter, Segoe UI, sans-serif" font-size="15">FRP 配置</text>
+  <text x="56" y="571" fill="#B8BEC8" font-family="Inter, Segoe UI, sans-serif" font-size="15">更新</text>
+
+  <rect x="348" y="24" width="1068" height="852" rx="20" fill="#0E1115" stroke="#252A31"/>
+  <text x="392" y="76" fill="#727986" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="700" letter-spacing="2">PROJECT ROOT</text>
+  <text x="392" y="116" fill="#F5F7FA" font-family="Inter, Segoe UI, sans-serif" font-size="30" font-weight="700">web-client</text>
+  <text x="392" y="145" fill="#858D99" font-family="JetBrains Mono, Consolas, monospace" font-size="13">C:\Projects\web-client</text>
+
+  <rect x="1110" y="68" width="122" height="38" rx="19" fill="#14251F" stroke="#2D6C53"/>
+  <circle cx="1134" cy="87" r="5" fill="#48C78E"/>
+  <text x="1150" y="92" fill="#9CE2C3" font-family="Inter, Segoe UI, sans-serif" font-size="13" font-weight="600">MCP 运行中</text>
+  <rect x="1244" y="68" width="124" height="38" rx="19" fill="#171A20" stroke="#343B45"/>
+  <circle cx="1268" cy="87" r="5" fill="#626A76"/>
+  <text x="1284" y="92" fill="#A7AFBA" font-family="Inter, Segoe UI, sans-serif" font-size="13">Actions</text>
+
+  <line x1="392" y1="174" x2="1372" y2="174" stroke="#252A31"/>
+  <text x="392" y="218" fill="#F2F4F7" font-family="Inter, Segoe UI, sans-serif" font-size="18" font-weight="700">MCP</text>
+  <text x="392" y="245" fill="#858D99" font-family="Inter, Segoe UI, sans-serif" font-size="14">当前项目根目录 · Streamable HTTP</text>
+
+  <rect x="392" y="280" width="476" height="164" rx="16" fill="#13171C" stroke="#292F37"/>
+  <text x="420" y="316" fill="#777F8B" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5">LOCAL ENDPOINT</text>
+  <text x="420" y="354" fill="#E9EDF2" font-family="JetBrains Mono, Consolas, monospace" font-size="16">http://127.0.0.1:28766/mcp</text>
+  <text x="420" y="402" fill="#777F8B" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5">PROJECT ROOT</text>
+  <text x="420" y="430" fill="#B7BEC8" font-family="JetBrains Mono, Consolas, monospace" font-size="14">C:\Projects\web-client</text>
+
+  <rect x="892" y="280" width="476" height="164" rx="16" fill="#13171C" stroke="#292F37"/>
+  <text x="920" y="316" fill="#777F8B" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5">PUBLIC MCP</text>
+  <text x="920" y="354" fill="#E9EDF2" font-family="JetBrains Mono, Consolas, monospace" font-size="16">https://mcp.example.com/mcp</text>
+  <text x="920" y="402" fill="#777F8B" font-family="Inter, Segoe UI, sans-serif" font-size="12" font-weight="700" letter-spacing="1.5">CONNECTION</text>
+  <circle cx="928" cy="427" r="5" fill="#48C78E"/>
+  <text x="944" y="432" fill="#9CE2C3" font-family="Inter, Segoe UI, sans-serif" font-size="14">固定域名 · OAuth 已就绪</text>
+
+  <rect x="392" y="476" width="976" height="314" rx="16" fill="#13171C" stroke="#292F37"/>
+  <text x="420" y="514" fill="#F2F4F7" font-family="Inter, Segoe UI, sans-serif" font-size="17" font-weight="700">运行状态</text>
+  <line x1="420" y1="538" x2="1340" y2="538" stroke="#252A31"/>
+  <text x="420" y="579" fill="#858D99" font-family="Inter, Segoe UI, sans-serif" font-size="13">工作区切换</text>
+  <text x="650" y="579" fill="#DDE2E8" font-family="Inter, Segoe UI, sans-serif" font-size="14">点击侧栏项目后自动切换根目录并激活 MCP</text>
+  <circle cx="1308" cy="574" r="6" fill="#48C78E"/>
+  <text x="420" y="627" fill="#858D99" font-family="Inter, Segoe UI, sans-serif" font-size="13">OAuth Client ID</text>
+  <text x="650" y="627" fill="#DDE2E8" font-family="Inter, Segoe UI, sans-serif" font-size="14">安装时生成，后续保持固定</text>
+  <circle cx="1308" cy="622" r="6" fill="#48C78E"/>
+  <text x="420" y="675" fill="#858D99" font-family="Inter, Segoe UI, sans-serif" font-size="13">Tunnel</text>
+  <text x="650" y="675" fill="#DDE2E8" font-family="Inter, Segoe UI, sans-serif" font-size="14">Cloudflare Named Tunnel / FRP</text>
+  <circle cx="1308" cy="670" r="6" fill="#48C78E"/>
+  <text x="420" y="723" fill="#858D99" font-family="Inter, Segoe UI, sans-serif" font-size="13">History</text>
+  <text x="650" y="723" fill="#DDE2E8" font-family="JetBrains Mono, Consolas, monospace" font-size="14">.web-codex/history-session/</text>
+  <circle cx="1308" cy="718" r="6" fill="#48C78E"/>
+  <text x="420" y="765" fill="#69717C" font-family="Inter, Segoe UI, sans-serif" font-size="12">示意图使用虚构路径、域名与项目名，不含本机配置或密钥。</text>
+</svg>
