@@ -170,6 +170,6 @@ Windows 当前的命令安全主要由 RootRelay 的工作区边界和命令策�
 
 RootRelay 使用 [Apache License 2.0](LICENSE)。
 
-感谢 [Coding Tools MCP](https://github.com/xyTom/coding-tools-mcp) 及其贡献者提供早期 Apache-2.0 代码基础。Copyright 2026 Coding Tools MCP Contributors。
+RootRelay 最初基于 [mybolide/coding-tools-mcp](https://github.com/mybolide/coding-tools-mcp) 继续开发；该项目本身 fork 自 Coding Tools MCP 原项目。感谢相关贡献者提供早期 Apache-2.0 代码基础。Copyright 2026 Coding Tools MCP Contributors。
 
 RootRelay 与 OpenAI、Anthropic、Cloudflare 没有隶属或官方合作关系。

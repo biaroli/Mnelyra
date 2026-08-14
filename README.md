@@ -170,6 +170,6 @@ Maintainer setup and engineering notes are kept in [docs/DEVELOPMENT.md](docs/DE
 
 RootRelay is licensed under the [Apache License 2.0](LICENSE).
 
-Thanks to [Coding Tools MCP](https://github.com/xyTom/coding-tools-mcp) and its contributors for the early Apache-2.0 code base. Copyright 2026 Coding Tools MCP Contributors.
+RootRelay grew out of [mybolide/coding-tools-mcp](https://github.com/mybolide/coding-tools-mcp), which itself is a fork of the original Coding Tools MCP project. Thanks to its contributors for the early Apache-2.0 code base. Copyright 2026 Coding Tools MCP Contributors.
 
 RootRelay is not affiliated with or endorsed by OpenAI, Anthropic, or Cloudflare.
