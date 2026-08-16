@@ -4,7 +4,7 @@ use std::fs;
 use std::process::Command;
 
 use common::*;
-use rootrelay_lib::tools::list_tools_for_profile;
+use mnelyra_lib::tools::list_tools_for_profile;
 use serde_json::{json, Value};
 
 #[cfg(windows)]
@@ -180,11 +180,11 @@ fn git_log_root_does_not_pass_empty_pathspec() {
 
 #[test]
 fn advanced_profile_exposes_every_declared_tool() {
-    let declared = rootrelay_lib::tools::registry::P0_TOOLS
+    let declared = mnelyra_lib::tools::registry::P0_TOOLS
         .iter()
         .map(|(name, ..)| *name)
         .collect::<std::collections::HashSet<_>>();
-    let tool_values = rootrelay_lib::tools::list_tools_for_profile("advanced");
+    let tool_values = mnelyra_lib::tools::list_tools_for_profile("advanced");
     let exposed = tool_values
         .iter()
         .filter_map(|tool| tool["name"].as_str())
@@ -193,17 +193,17 @@ fn advanced_profile_exposes_every_declared_tool() {
     assert_eq!(declared, exposed);
     assert!(declared
         .iter()
-        .all(|name| rootrelay_lib::tools::is_allowed_tool(name)));
+        .all(|name| mnelyra_lib::tools::is_allowed_tool(name)));
 }
 
 #[test]
 fn core_profile_keeps_the_default_capabilities_and_adds_history_tools() {
-    let tools = rootrelay_lib::tools::list_tools_for_profile("core");
+    let tools = mnelyra_lib::tools::list_tools_for_profile("core");
     let names = tools
         .iter()
         .filter_map(|tool| tool["name"].as_str())
         .collect::<std::collections::HashSet<_>>();
-    let expected = rootrelay_lib::tools::registry::CORE_TOOLS
+    let expected = mnelyra_lib::tools::registry::CORE_TOOLS
         .iter()
         .copied()
         .collect::<std::collections::HashSet<_>>();
@@ -481,10 +481,10 @@ fn search_text_stops_after_max_results() {
 
 #[test]
 fn grep_reuses_search_text_schema_and_behavior() {
-    let schema = rootrelay_lib::tools::registry::input_schema("grep");
+    let schema = mnelyra_lib::tools::registry::input_schema("grep");
     assert_eq!(
         schema,
-        rootrelay_lib::tools::registry::input_schema("search_text")
+        mnelyra_lib::tools::registry::input_schema("search_text")
     );
 
     let fx = tiny_js_fixture();

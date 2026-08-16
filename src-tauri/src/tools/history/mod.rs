@@ -20,7 +20,7 @@ const MAX_READ_MAX_BYTES: usize = 64 * 1024;
 
 pub(crate) fn refresh_derived_memory(workspace_root: &std::path::Path) -> WorkspaceResult<()> {
     let workspace = crate::tools::workspace::Workspace::new(workspace_root.to_path_buf())?;
-    let history_dir = workspace.root().join(storage::DEFAULT_HISTORY_DIR);
+    let history_dir = storage::resolve_history_dir(&workspace, None, None)?;
     storage::ensure_directory(&history_dir)?;
     let _lock = storage::lock_directory(&history_dir)?;
     let report = storage::scan(&workspace, &history_dir)?;
@@ -50,6 +50,13 @@ pub(crate) fn refresh_derived_memory(workspace_root: &std::path::Path) -> Worksp
     storage::write_manifest(&history_dir, &manifest)?;
     storage::write_state(&history_dir, &state)?;
     Ok(())
+}
+
+pub(crate) fn workspace_history_dir(
+    workspace_root: &std::path::Path,
+) -> WorkspaceResult<std::path::PathBuf> {
+    let workspace = crate::tools::workspace::Workspace::new(workspace_root.to_path_buf())?;
+    storage::resolve_history_dir(&workspace, None, None)
 }
 
 pub fn bootstrap(ctx: &ToolContext, args: &Value) -> WorkspaceResult<Value> {

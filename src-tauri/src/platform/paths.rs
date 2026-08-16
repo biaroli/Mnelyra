@@ -1,7 +1,7 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
-const APP_DIR: &str = "rootrelay";
+const APP_DIR: &str = "mnelyra";
 
 pub fn app_config_dir(base: impl AsRef<Path>) -> PathBuf {
     app_config_dir_with_override(base, env::var_os("MNELYRA_DATA_DIR"))
@@ -52,6 +52,14 @@ pub fn append_if_exists(paths: &mut Vec<PathBuf>, candidate: impl AsRef<Path>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_app_dir_uses_mnelyra_name() {
+        assert_eq!(
+            app_config_dir_with_override(Path::new("base"), Option::<PathBuf>::None),
+            Path::new("base").join("mnelyra")
+        );
+    }
 
     #[test]
     fn explicit_absolute_mnelyra_data_dir_wins_without_mutating_process_env() {

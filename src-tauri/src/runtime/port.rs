@@ -12,7 +12,7 @@ pub fn is_own_process(pid: u32) -> bool {
 }
 
 #[cfg(any(target_os = "macos", test))]
-const DESKTOP_EXECUTABLE_NAME: &str = "rootrelay";
+const DESKTOP_EXECUTABLE_NAME: &str = "mnelyra";
 #[cfg(any(target_os = "macos", test))]
 const DESKTOP_BUNDLE_ID: &str = "io.mnelyra.desktop";
 
@@ -250,12 +250,7 @@ mod tests {
     #[test]
     fn recognizes_current_mnelyra_macos_bundle() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let executable = write_bundle(
-            temp.path(),
-            "Mnelyra.app",
-            "rootrelay",
-            "io.mnelyra.desktop",
-        );
+        let executable = write_bundle(temp.path(), "Mnelyra.app", "mnelyra", "io.mnelyra.desktop");
 
         assert!(is_managed_macos_desktop_executable(&executable));
     }
@@ -266,7 +261,7 @@ mod tests {
         let executable = write_bundle(
             temp.path(),
             "Mnelyra.app",
-            "rootrelay",
+            "mnelyra",
             "com.example.other-app",
         );
 
@@ -276,13 +271,8 @@ mod tests {
     #[test]
     fn rejects_a_matching_identifier_from_a_different_app_bundle() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let executable = write_bundle(
-            temp.path(),
-            "Mnelyra.app",
-            "rootrelay",
-            "io.mnelyra.desktop",
-        );
-        let other = temp.path().join("Other.app/Contents/MacOS/rootrelay");
+        let executable = write_bundle(temp.path(), "Mnelyra.app", "mnelyra", "io.mnelyra.desktop");
+        let other = temp.path().join("Other.app/Contents/MacOS/mnelyra");
         fs::create_dir_all(other.parent().expect("MacOS dir")).expect("create other bundle");
         fs::copy(
             executable

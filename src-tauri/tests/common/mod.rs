@@ -3,8 +3,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use rootrelay_lib::tools::policy::{validate_tool_arguments, PolicySettings};
-use rootrelay_lib::tools::{call_tool, ToolContext};
+use mnelyra_lib::tools::policy::{validate_tool_arguments, PolicySettings};
+use mnelyra_lib::tools::{call_tool, ToolContext};
 use serde_json::{json, Value};
 
 pub struct FixtureWorkspace {

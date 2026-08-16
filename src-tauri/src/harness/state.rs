@@ -23,6 +23,30 @@ pub struct Harness {
     store: HarnessStore,
 }
 
+fn copy_directory(source: &Path, target: &Path) -> HarnessResult<()> {
+    for entry in WalkDir::new(source) {
+        let entry =
+            entry.map_err(|error| HarnessError::new("STORE_UNAVAILABLE", error.to_string()))?;
+        let relative = entry
+            .path()
+            .strip_prefix(source)
+            .map_err(|error| HarnessError::new("STORE_UNAVAILABLE", error.to_string()))?;
+        let destination = target.join(relative);
+        if entry.file_type().is_dir() {
+            fs::create_dir_all(&destination)
+                .map_err(|error| HarnessError::new("STORE_UNAVAILABLE", error.to_string()))?;
+        } else if entry.file_type().is_file() {
+            if let Some(parent) = destination.parent() {
+                fs::create_dir_all(parent)
+                    .map_err(|error| HarnessError::new("STORE_UNAVAILABLE", error.to_string()))?;
+            }
+            fs::copy(entry.path(), &destination)
+                .map_err(|error| HarnessError::new("STORE_UNAVAILABLE", error.to_string()))?;
+        }
+    }
+    Ok(())
+}
+
 impl Harness {
     pub fn new(workspace_root: PathBuf, harness_root: PathBuf) -> HarnessResult<Self> {
         let workspace_root = workspace_root
@@ -40,7 +64,12 @@ impl Harness {
         let root = dirs::data_local_dir()
             .or_else(dirs::data_dir)
             .ok_or_else(|| HarnessError::new("STORE_UNAVAILABLE", "无法确定应用数据目录"))?;
-        Ok(root.join("rootrelay").join("workspace-state"))
+        let current = root.join("mnelyra").join("workspace-state");
+        let legacy = root.join("rootrelay").join("workspace-state");
+        if !current.exists() && legacy.is_dir() {
+            copy_directory(&legacy, &current)?;
+        }
+        Ok(current)
     }
 
     pub fn workspace_id(&self) -> &str {

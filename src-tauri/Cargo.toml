@@ -1,12 +1,12 @@
 [package]
-name = "rootrelay"
-version = "0.2.2"
+name = "mnelyra"
+version = "0.2.3"
 description = "Shared local workspace and MCP relay for ChatGPT, Claude, and other clients"
 authors = ["Mnelyra Contributors"]
 edition = "2021"
 
 [lib]
-name = "rootrelay_lib"
+name = "mnelyra_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

@@ -27,7 +27,7 @@ impl ToolContext {
     pub fn new(workspace_path: PathBuf) -> Result<Self, String> {
         let workspace = Workspace::new(workspace_path).map_err(|e| e.message())?;
         let auth = AuthConfig {
-            auth_type: "noauth".into(),
+            auth_type: "internal".into(),
             ..AuthConfig::default()
         };
         Ok(Self::from_workspace(
@@ -134,7 +134,7 @@ impl ToolContext {
         Ok(Self::from_workspace_with_harness_root(
             workspace,
             AuthConfig {
-                auth_type: "noauth".into(),
+                auth_type: "internal".into(),
                 ..AuthConfig::default()
             },
             PolicySettings::default(),

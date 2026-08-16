@@ -1,6 +1,6 @@
 {
   "name": "mnelyra",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Shared local workspace and MCP relay for ChatGPT, Claude, and other clients",
   "author": "Mnelyra Contributors",
   "type": "module",

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use tauri::State;
 
-use crate::app_state::{bootstrap_workspace, teardown_workspace, AppState};
+use crate::app_state::AppState;
 use crate::error::{AppError, AppResult};
 use crate::platform::open_path_in_file_manager;
 use crate::tunnel::drop_workspace as drop_tunnel_workspace;
@@ -27,7 +27,6 @@ pub fn create_workspace(
         // Create should not fail just because default ports are already claimed.
         // Pick free ports now; start/update still enforce conflict checks.
         assign_free_workspace_ports(store.list(), &mut profile)?;
-        bootstrap_workspace(store, &profile.id)?;
         store.add(profile.clone())?;
         Ok(profile)
     })
@@ -64,10 +63,5 @@ pub fn delete_workspace(state: State<'_, AppState>, id: String) -> AppResult<()>
         runtime.drop_workspace(&profile);
         Ok(())
     })?;
-    state.with_workspaces(|store| {
-        if store.remove(&id)?.is_some() {
-            teardown_workspace(store, &id)?;
-        }
-        Ok(())
-    })
+    state.with_workspaces(|store| store.remove(&id).map(|_| ()))
 }

@@ -1,6 +1,6 @@
 use std::fs;
 
-use rootrelay_lib::harness::{Harness, TaskStatus};
+use mnelyra_lib::harness::{Harness, TaskStatus};
 use serde_json::json;
 
 fn fixture() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {

@@ -39,10 +39,7 @@ pub use provider::{
     send_session_input, set_codex_auto_compact_limit, set_permission_ceiling, start_provider_task,
 };
 pub use runtime::{get_runtime_status, restart_runtime, start_runtime, stop_runtime};
-pub use secrets::{
-    get_shared_secret, get_workspace_secret, regenerate_shared_secret, regenerate_workspace_secret,
-    set_shared_secret, set_workspace_secret,
-};
+pub use secrets::{get_shared_secret, regenerate_shared_secret, set_shared_secret};
 pub use software::{
     get_download_config, install_software, list_software, set_download_config, uninstall_software,
 };

@@ -86,9 +86,9 @@ Changing the permission ceiling must affect the running system, not only persist
 
 ## Authentication
 
-Authentication is installation-level and remains stable while Workspaces change. OAuth uses one persistent installation Client ID, PKCE authorization codes, a rotatable connection secret, and internal signing material that is never exposed through the frontend.
+Authentication is installation-level and remains stable while Workspaces change. OAuth uses one persistent installation Client ID, PKCE authorization codes, refresh tokens for long-lived clients, a rotatable connection secret, and internal signing material that is never exposed through the frontend.
 
-Bearer-token authentication is available when OAuth is unnecessary. User-configurable MCP authentication is limited to OAuth and bearer tokens; legacy `noauth` settings are normalized back to OAuth when loaded.
+Bearer-token authentication is available when OAuth is unnecessary. OAuth and bearer token are the only user-configurable MCP authentication modes.
 
 New Client IDs use the `mnelyra-client-` prefix. Do not introduce a second authentication model for a specific Workspace or routing provider.
 
@@ -96,7 +96,7 @@ New Client IDs use the `mnelyra-client-` prefix. Do not introduce a second authe
 
 The local MCP service binds to loopback. Remote access is provided through OpenAI secure connection, Cloudflare, or FRP. These are transport choices around the same MCP service; they are not separate tool runtimes.
 
-The OpenAI secure connection uses the Tunnel ID and OpenAI API Key configured on the Connections page. Cloudflare and FRP remain independent public-routing choices. Connection status in the UI must reflect actual route readiness rather than merely the existence of a local listener.
+The OpenAI secure connection uses the Tunnel ID and OpenAI API Key configured on the Connections page. Its tunnel client authenticates to the private loopback MCP listener with Mnelyra's internal tunnel token, so the OpenAI tunnel path must not add a second Mnelyra OAuth login. Cloudflare and FRP remain independent public-routing choices. Connection status in the UI must reflect actual route readiness rather than merely the existence of a local listener.
 
 Do not duplicate routing configuration per Workspace. Routing belongs to the application connection layer.
 

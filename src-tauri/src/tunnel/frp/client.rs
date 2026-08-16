@@ -8,7 +8,7 @@ use tokio::process::{Child, Command};
 use tokio::time::{sleep, Duration};
 
 use crate::error::{AppError, AppResult};
-use crate::platform::platform;
+use crate::platform::{legacy_app_config_dir, platform};
 use crate::tunnel::cloudflare::stop_child;
 use crate::tunnel::supervisor::log_dir_for_profile;
 use crate::tunnel::TunnelServiceKind;
@@ -26,6 +26,24 @@ const FRPC_STALE_LOCK_AFTER: Duration = Duration::from_secs(30);
 pub struct FrpcHandle {
     pub child: Child,
     pub pid: Option<u32>,
+}
+
+fn migrate_legacy_cached_frpc() -> Option<PathBuf> {
+    let current = cached_frpc_path()?;
+    if current.is_file() {
+        return Some(current);
+    }
+    let legacy = legacy_app_config_dir()?
+        .join("bin")
+        .join(frpc_binary_name());
+    if !legacy.is_file() {
+        return None;
+    }
+    if let Some(parent) = current.parent() {
+        std::fs::create_dir_all(parent).ok()?;
+    }
+    std::fs::copy(legacy, &current).ok()?;
+    current.is_file().then_some(current)
 }
 
 fn managed_frpc_dir(workspace_id: &str) -> AppResult<PathBuf> {
@@ -163,6 +181,7 @@ pub fn resolve_frpc() -> AppResult<PathBuf> {
                 .find(|path| path.is_file())
         })
         .or_else(|| cached_frpc_path().filter(|path| path.is_file()))
+        .or_else(migrate_legacy_cached_frpc)
         .ok_or_else(|| {
             AppError::Message(
                 "未找到 frpc。连接隧道时将尝试自动下载；也可自行安装 frp 客户端。".into(),
@@ -513,7 +532,6 @@ pub(crate) fn classify_public_mcp_body(status: u16, body: &str) -> PublicMcpProb
     }
     if status == 200
         && (lower.contains("mnelyra")
-            || lower.contains("rootrelay")
             || lower.contains("protocolversion")
             || lower.contains("\"name\""))
     {
@@ -955,10 +973,7 @@ mod tests {
             PublicMcpProbe::FrpNotRouted
         );
         assert_eq!(
-            classify_public_mcp_body(
-                200,
-                r#"{"name":"rootrelay","protocolVersion":"2025-06-18"}"#
-            ),
+            classify_public_mcp_body(200, r#"{"name":"mnelyra","protocolVersion":"2025-06-18"}"#),
             PublicMcpProbe::Healthy
         );
     }

@@ -534,7 +534,7 @@ pub fn input_schema(name: &str) -> Value {
                 "session_key": { "type": "string", "minLength": 1 },
                 "title": { "type": "string" },
                 "initial_user_input": { "type": "string" },
-                "history_dir": { "type": "string", "default": ".rootrelay/history-session" },
+                "history_dir": { "type": "string", "default": ".mnelyra/history-session" },
                 "create_if_missing": { "type": "boolean", "default": true }
             },
             "additionalProperties": false
@@ -546,7 +546,7 @@ pub fn input_schema(name: &str) -> Value {
                 "workspace_root": { "type": "string", "minLength": 1 },
                 "session_key": { "type": "string", "minLength": 1 },
                 "expected_path": { "type": "string", "minLength": 1 },
-                "history_dir": { "type": "string", "default": ".rootrelay/history-session" },
+                "history_dir": { "type": "string", "default": ".mnelyra/history-session" },
                 "turn_id": { "type": "string", "minLength": 1 },
                 "timestamp": { "type": "string" },
                 "user_intent": { "type": "string" },
@@ -566,7 +566,7 @@ pub fn input_schema(name: &str) -> Value {
             "type": "object",
             "properties": {
                 "workspace_root": { "type": "string", "minLength": 1 },
-                "history_dir": { "type": "string", "default": ".rootrelay/history-session" },
+                "history_dir": { "type": "string", "default": ".mnelyra/history-session" },
                 "repair": { "type": "boolean", "default": false }
             },
             "additionalProperties": false
@@ -575,7 +575,7 @@ pub fn input_schema(name: &str) -> Value {
             "type": "object",
             "properties": {
                 "workspace_root": { "type": "string", "minLength": 1 },
-                "history_dir": { "type": "string", "default": ".rootrelay/history-session" },
+                "history_dir": { "type": "string", "default": ".mnelyra/history-session" },
                 "query": { "type": "string", "default": "" },
                 "cursor": { "type": "integer", "minimum": 0, "default": 0 },
                 "limit": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 }
@@ -586,7 +586,7 @@ pub fn input_schema(name: &str) -> Value {
             "type": "object",
             "properties": {
                 "workspace_root": { "type": "string", "minLength": 1 },
-                "history_dir": { "type": "string", "default": ".rootrelay/history-session" },
+                "history_dir": { "type": "string", "default": ".mnelyra/history-session" },
                 "number": { "type": "integer", "minimum": 1 },
                 "path": { "type": "string", "minLength": 1 },
                 "cursor": { "type": "integer", "minimum": 0, "default": 0 },

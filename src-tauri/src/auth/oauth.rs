@@ -13,7 +13,7 @@ impl AuthConfig {
     }
 
     pub fn auth_enabled(&self) -> bool {
-        self.auth_type != "noauth"
+        matches!(self.auth_type.as_str(), "oauth" | "bearer")
     }
 }
 
@@ -144,9 +144,10 @@ pub fn authorization_server_metadata(base_url: &str, client_secret: Option<&str>
         "authorization_endpoint": format!("{base}/oauth/authorize"),
         "token_endpoint": format!("{base}/oauth/token"),
         "response_types_supported": ["code"],
-        "grant_types_supported": ["authorization_code"],
+        "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": methods,
+        "scopes_supported": ["mcp", "offline_access"],
     })
 }
 
@@ -169,7 +170,7 @@ mod tests {
         assert!(auth.oauth_enabled());
         auth.auth_type = "bearer".into();
         assert!(!auth.oauth_enabled());
-        auth.auth_type = "noauth".into();
+        auth.auth_type = "internal".into();
         assert!(!auth.oauth_enabled());
     }
 

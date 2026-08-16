@@ -65,6 +65,13 @@ pub fn platform() -> &'static dyn Platform {
     PLATFORM.get_or_init(|| create_platform()).as_ref()
 }
 
+pub(crate) fn legacy_app_config_dir() -> Option<PathBuf> {
+    let current = platform().app_config_dir().ok()?;
+    let parent = current.parent()?;
+    let legacy = parent.join("rootrelay");
+    (legacy != current).then_some(legacy)
+}
+
 fn create_platform() -> Box<dyn Platform> {
     #[cfg(target_os = "windows")]
     {

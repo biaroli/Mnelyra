@@ -15,7 +15,8 @@ use super::model::{
     MemoryState, ProviderMemorySource, ScanReport,
 };
 
-pub const DEFAULT_HISTORY_DIR: &str = ".rootrelay/history-session";
+pub const DEFAULT_HISTORY_DIR: &str = ".mnelyra/history-session";
+pub const LEGACY_HISTORY_DIR: &str = ".rootrelay/history-session";
 const STATE_ITEM_LIMIT: usize = 12;
 const STATE_TEXT_LIMIT: usize = 512;
 const STATE_FOCUS_LIMIT: usize = 2_048;
@@ -71,6 +72,9 @@ pub fn resolve_history_dir(
     if raw.is_empty() || workspace.reject_unsafe_text(raw).is_err() {
         return Err(WorkspaceError::path_outside_workspace());
     }
+    if matches!(raw, DEFAULT_HISTORY_DIR | LEGACY_HISTORY_DIR) {
+        return migrate_default_history_dir(workspace);
+    }
     let candidate = workspace
         .root()
         .join(raw.replace('/', std::path::MAIN_SEPARATOR_STR));
@@ -81,6 +85,38 @@ pub fn resolve_history_dir(
         ));
     }
     Ok(candidate)
+}
+
+fn migrate_default_history_dir(workspace: &Workspace) -> WorkspaceResult<PathBuf> {
+    let current = workspace
+        .root()
+        .join(DEFAULT_HISTORY_DIR.replace('/', std::path::MAIN_SEPARATOR_STR));
+    if current.exists() {
+        ensure_safe_candidate(workspace, &current)?;
+        return Ok(current);
+    }
+
+    let legacy = workspace
+        .root()
+        .join(LEGACY_HISTORY_DIR.replace('/', std::path::MAIN_SEPARATOR_STR));
+    if legacy.exists() {
+        ensure_safe_candidate(workspace, &legacy)?;
+        if !legacy.is_dir() {
+            return Err(WorkspaceError::not_a_directory(
+                "legacy history path must be a directory",
+            ));
+        }
+        if let Some(parent) = current.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|error| io_error("HISTORY_WRITE_FAILED", error, true))?;
+        }
+        fs::rename(&legacy, &current)
+            .map_err(|error| io_error("HISTORY_WRITE_FAILED", error, true))?;
+        if let Some(legacy_parent) = legacy.parent() {
+            let _ = fs::remove_dir(legacy_parent);
+        }
+    }
+    Ok(current)
 }
 
 fn ensure_safe_candidate(workspace: &Workspace, candidate: &Path) -> WorkspaceResult<()> {

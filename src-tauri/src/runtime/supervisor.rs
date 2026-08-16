@@ -258,20 +258,17 @@ impl RuntimeSupervisor {
 
         let spawn_result = match kind {
             ServiceKind::Mcp => {
-                let use_shared = profile.auth.use_shared_secrets;
                 let mut auth = profile.auth.clone();
-                if use_shared {
-                    if let Some(client_id) = SecretStore::get_shared("oauth_client_id")? {
-                        auth.oauth_client_id = client_id;
-                    }
+                if let Some(client_id) = SecretStore::get_shared("oauth_client_id")? {
+                    auth.oauth_client_id = client_id;
                 }
                 let oauth_client_secret = if profile.auth.oauth_enabled() {
-                    resolve_secret(&profile.id, "oauth_client_secret", use_shared)?
+                    SecretStore::get_shared("oauth_client_secret")?
                 } else {
                     None
                 };
                 let oauth_token_secret = if profile.auth.oauth_enabled() {
-                    resolve_secret(&profile.id, "oauth_token_secret", use_shared)?
+                    SecretStore::get_shared("oauth_token_secret")?
                 } else {
                     None
                 };
@@ -496,15 +493,6 @@ fn service_label(kind: ServiceKind) -> &'static str {
 fn stderr_log_name(kind: ServiceKind) -> &'static str {
     match kind {
         ServiceKind::Mcp => "stderr.log",
-    }
-}
-
-/// Resolve a secret from the shared pool or per-workspace keyring.
-fn resolve_secret(profile_id: &str, key: &str, use_shared: bool) -> AppResult<Option<String>> {
-    if use_shared {
-        SecretStore::get_shared(key)
-    } else {
-        SecretStore::get(profile_id, key)
     }
 }
 

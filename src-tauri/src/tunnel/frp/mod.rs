@@ -134,12 +134,6 @@ fn resolve_frp_token(
             }
         }
     }
-    if let Ok(Some(token)) = crate::secret::SecretStore::get(&workspace.id, workspace_key) {
-        if !token.trim().is_empty() {
-            return Some(token);
-        }
-    }
-
     // Manual inline server: reuse token from a global profile with the same host.
     let inline_server = match kind {
         TunnelServiceKind::Mcp => workspace.tunnel.frp_server.as_str(),

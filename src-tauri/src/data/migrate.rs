@@ -25,6 +25,15 @@ pub fn load_or_migrate() -> AppResult<AppData> {
     }
 
     let app_root = platform().app_config_dir()?;
+    if let Some(legacy_root) = legacy_app_root(&app_root) {
+        let legacy_data = legacy_root.join("data").join("profiles.json");
+        if legacy_data.is_file() {
+            let raw = fs::read_to_string(&legacy_data)?;
+            if let Ok(data) = serde_json::from_str::<AppData>(&raw) {
+                return Ok(data);
+            }
+        }
+    }
     let mut data = AppData::default();
 
     let legacy_profiles = app_root.join(LEGACY_PROFILES_FILE);
@@ -44,6 +53,12 @@ pub fn load_or_migrate() -> AppResult<AppData> {
     }
 
     Ok(data)
+}
+
+fn legacy_app_root(current: &Path) -> Option<PathBuf> {
+    let parent = current.parent()?;
+    let legacy = parent.join("rootrelay");
+    (legacy != current).then_some(legacy)
 }
 
 pub fn save(data: &AppData) -> AppResult<()> {
@@ -84,4 +99,19 @@ fn merge_settings(data: &mut AppData, settings: AppSettings) {
     data.shared_secrets = settings.shared_secrets;
     data.workspace_secrets = settings.workspace_secrets;
     data.app_secrets = settings.app_secrets;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::legacy_app_root;
+    use std::path::Path;
+
+    #[test]
+    fn legacy_app_root_is_a_sibling_of_mnelyra() {
+        let current = Path::new("base").join("mnelyra");
+        assert_eq!(
+            legacy_app_root(&current),
+            Some(Path::new("base").join("rootrelay"))
+        );
+    }
 }

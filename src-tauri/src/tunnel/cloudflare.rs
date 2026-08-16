@@ -7,7 +7,7 @@ use tokio::sync::oneshot;
 use tokio::time;
 
 use crate::error::{AppError, AppResult};
-use crate::platform::platform;
+use crate::platform::{legacy_app_config_dir, platform};
 
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -18,12 +18,31 @@ pub struct CloudflareTunnelHandle {
     pub pid: Option<u32>,
 }
 
+fn migrate_legacy_cached_cloudflared() -> Option<PathBuf> {
+    let current = cached_cloudflared_path()?;
+    if current.is_file() {
+        return Some(current);
+    }
+    let legacy = legacy_app_config_dir()?
+        .join("bin")
+        .join(cloudflared_binary_name());
+    if !legacy.is_file() {
+        return None;
+    }
+    if let Some(parent) = current.parent() {
+        std::fs::create_dir_all(parent).ok()?;
+    }
+    std::fs::copy(legacy, &current).ok()?;
+    current.is_file().then_some(current)
+}
+
 pub fn resolve_cloudflared() -> AppResult<PathBuf> {
     platform()
         .cloudflared_candidates()
         .into_iter()
         .find(|path| path.is_file())
         .or_else(|| cached_cloudflared_path().filter(|path| path.is_file()))
+        .or_else(migrate_legacy_cached_cloudflared)
         .ok_or_else(|| {
             AppError::Message(
                 "未找到 cloudflared。请到「软件管理」安装，或自行安装 Cloudflare Tunnel CLI。\n\

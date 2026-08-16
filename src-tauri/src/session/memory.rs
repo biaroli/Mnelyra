@@ -88,7 +88,7 @@ pub(super) fn write_provider_checkpoint(
         AppError::Message(format!("session {} has no provider session id", session.id))
     })?;
     let root = canonical_session_root(session)?;
-    let directory = providers_dir(&root);
+    let directory = providers_dir(&root)?;
     std::fs::create_dir_all(&directory)?;
 
     let (thread_metadata, turn_snapshot) = split_thread_snapshot(thread_read, turn_id);
@@ -130,7 +130,8 @@ pub fn list_provider_checkpoints(
     workspace_root: &Path,
 ) -> AppResult<WorkspaceMemoryOverview> {
     let root = std::fs::canonicalize(workspace_root)?;
-    let history_root = root.join(".rootrelay").join("history-session");
+    let history_root = crate::tools::history::workspace_history_dir(&root)
+        .map_err(|error| AppError::Message(error.to_string()))?;
     let memory_root = history_root.join("memory");
     let directory = memory_root.join("providers");
     let mut summaries = Vec::new();
@@ -181,7 +182,7 @@ pub fn read_provider_checkpoint(
 ) -> AppResult<ProviderCheckpoint> {
     validate_checkpoint_id(checkpoint_id)?;
     let root = std::fs::canonicalize(workspace_root)?;
-    let path = providers_dir(&root).join(format!("{checkpoint_id}.json"));
+    let path = providers_dir(&root)?.join(format!("{checkpoint_id}.json"));
     read_checkpoint_path(&path)
 }
 
@@ -196,11 +197,11 @@ fn canonical_session_root(session: &TaskSession) -> AppResult<PathBuf> {
     Ok(root)
 }
 
-fn providers_dir(root: &Path) -> PathBuf {
-    root.join(".rootrelay")
-        .join("history-session")
+fn providers_dir(root: &Path) -> AppResult<PathBuf> {
+    Ok(crate::tools::history::workspace_history_dir(root)
+        .map_err(|error| AppError::Message(error.to_string()))?
         .join("memory")
-        .join("providers")
+        .join("providers"))
 }
 
 fn split_thread_snapshot(thread_read: &Value, turn_id: Option<&str>) -> (Value, Value) {

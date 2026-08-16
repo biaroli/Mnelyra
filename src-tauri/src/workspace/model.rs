@@ -36,8 +36,6 @@ pub struct AuthConfig {
     pub auth_type: String,
     #[serde(default = "default_oauth_client_id")]
     pub oauth_client_id: String,
-    #[serde(default)]
-    pub use_shared_secrets: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,7 +131,6 @@ impl Default for AuthConfig {
         Self {
             auth_type: default_auth_type(),
             oauth_client_id: default_oauth_client_id(),
-            use_shared_secrets: false,
         }
     }
 }

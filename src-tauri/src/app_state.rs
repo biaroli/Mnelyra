@@ -137,11 +137,3 @@ impl Default for AppState {
         Self::new().expect("failed to initialize app state")
     }
 }
-
-pub fn bootstrap_workspace(store: &mut DataStore, profile_id: &str) -> AppResult<()> {
-    store.init_workspace_secrets(profile_id)
-}
-
-pub fn teardown_workspace(store: &mut DataStore, profile_id: &str) -> AppResult<()> {
-    store.remove_workspace_secrets(profile_id)
-}

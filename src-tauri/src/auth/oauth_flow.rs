@@ -2,7 +2,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use axum::http::{header::AUTHORIZATION, HeaderMap, StatusCode};
+use axum::http::{
+    header::{AUTHORIZATION, WWW_AUTHENTICATE},
+    HeaderMap, HeaderValue, StatusCode,
+};
 use axum::response::{Html, IntoResponse, Redirect, Response};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
@@ -14,6 +17,7 @@ use super::bearer::constant_time_eq_str;
 
 pub const OAUTH_CODE_TTL_SECONDS: u64 = 300;
 pub const OAUTH_TOKEN_TTL_SECONDS: i64 = 60 * 60 * 24 * 30;
+pub const OAUTH_REFRESH_TOKEN_TTL_SECONDS: i64 = 60 * 60 * 24 * 180;
 #[allow(dead_code)]
 pub const OAUTH_MAX_BODY_BYTES: usize = 8_192;
 
@@ -34,6 +38,11 @@ struct PendingCode {
     state: String,
     expires_at: u64,
     server_url: String,
+    scope: String,
+}
+
+fn default_access_token_kind() -> String {
+    "access".into()
 }
 
 #[derive(Serialize, Deserialize)]
@@ -43,6 +52,8 @@ struct TokenClaims {
     iat: i64,
     exp: i64,
     scope: String,
+    #[serde(default = "default_access_token_kind")]
+    token_kind: String,
 }
 
 impl OAuthRuntime {
@@ -71,6 +82,14 @@ impl OAuthRuntime {
     }
 
     pub fn verify_access_token(&self, token: &str, server_url: &str) -> bool {
+        self.verify_token_kind(token, server_url, "access")
+    }
+
+    pub fn verify_refresh_token(&self, token: &str, server_url: &str) -> bool {
+        self.verify_token_kind(token, server_url, "refresh")
+    }
+
+    fn verify_token_kind(&self, token: &str, server_url: &str, expected_kind: &str) -> bool {
         let server_url = server_url.trim_end_matches('/');
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_audience(&[server_url]);
@@ -80,8 +99,22 @@ impl OAuthRuntime {
             &DecodingKey::from_secret(self.token_secret.as_bytes()),
             &validation,
         )
-        .is_ok()
+        .map(|data| data.claims.token_kind == expected_kind)
+        .unwrap_or(false)
     }
+}
+
+fn oauth_unauthorized(message: &'static str, server_url: &str) -> Response {
+    let mut response = (StatusCode::UNAUTHORIZED, message).into_response();
+    let resource_metadata = format!(
+        "{}/.well-known/oauth-protected-resource",
+        server_url.trim_end_matches('/')
+    );
+    let challenge = format!("Bearer resource_metadata=\"{resource_metadata}\", scope=\"mcp\"");
+    if let Ok(value) = HeaderValue::from_str(&challenge) {
+        response.headers_mut().insert(WWW_AUTHENTICATE, value);
+    }
+    response
 }
 
 pub fn verify_oauth_bearer_header(
@@ -90,18 +123,24 @@ pub fn verify_oauth_bearer_header(
     server_url: &str,
 ) -> Option<Response> {
     let Some(header_value) = headers.get(AUTHORIZATION) else {
-        return Some((StatusCode::UNAUTHORIZED, "Missing Authorization header").into_response());
+        return Some(oauth_unauthorized(
+            "Missing Authorization header",
+            server_url,
+        ));
     };
     let Ok(header_str) = header_value.to_str() else {
-        return Some((StatusCode::UNAUTHORIZED, "Invalid Authorization header").into_response());
+        return Some(oauth_unauthorized(
+            "Invalid Authorization header",
+            server_url,
+        ));
     };
     let Some(token) = header_str.strip_prefix("Bearer ").map(str::trim) else {
-        return Some((StatusCode::UNAUTHORIZED, "Invalid bearer token").into_response());
+        return Some(oauth_unauthorized("Invalid bearer token", server_url));
     };
     if oauth.verify_access_token(token, server_url) {
         None
     } else {
-        Some((StatusCode::UNAUTHORIZED, "Invalid bearer token").into_response())
+        Some(oauth_unauthorized("Invalid bearer token", server_url))
     }
 }
 
@@ -114,17 +153,25 @@ pub struct AuthorizeParams {
     pub code_challenge_method: String,
     #[serde(default)]
     pub state: String,
+    #[serde(default)]
+    pub scope: String,
 }
 
 #[derive(Debug, Deserialize, Default)]
 pub struct TokenForm {
     pub grant_type: String,
+    #[serde(default)]
     pub code: String,
+    #[serde(default)]
     pub redirect_uri: String,
+    #[serde(default)]
     pub code_verifier: String,
+    #[serde(default)]
     pub client_id: String,
     #[serde(default)]
     pub client_secret: String,
+    #[serde(default)]
+    pub refresh_token: String,
 }
 
 pub fn authorize_get(oauth: &OAuthRuntime, params: AuthorizeParams, server_url: &str) -> Response {
@@ -155,6 +202,7 @@ pub fn authorize_get(oauth: &OAuthRuntime, params: AuthorizeParams, server_url: 
                 state: params.state.clone(),
                 expires_at: now + OAUTH_CODE_TTL_SECONDS,
                 server_url: server_url.clone(),
+                scope: normalize_scope(&params.scope),
             },
         );
     }
@@ -177,13 +225,6 @@ pub fn token_exchange(
     mut form: TokenForm,
     server_url: &str,
 ) -> Response {
-    if form.grant_type != "authorization_code" {
-        return token_error(
-            "unsupported_grant_type",
-            "Only authorization_code is supported",
-        );
-    }
-
     if let Some((id, secret)) = basic_auth_credentials(headers) {
         if form.client_id.is_empty() {
             form.client_id = id;
@@ -200,6 +241,21 @@ pub fn token_exchange(
         if !constant_time_eq_str(&form.client_secret, expected) {
             return token_error("invalid_client", "Invalid client_secret");
         }
+    }
+    if form.grant_type == "refresh_token" {
+        if form.refresh_token.is_empty() {
+            return token_error("invalid_grant", "refresh_token is required");
+        }
+        if !oauth.verify_refresh_token(&form.refresh_token, server_url) {
+            return token_error("invalid_grant", "Invalid refresh token");
+        }
+        return issue_token_pair(oauth, server_url, "mcp offline_access");
+    }
+    if form.grant_type != "authorization_code" {
+        return token_error(
+            "unsupported_grant_type",
+            "Only authorization_code and refresh_token are supported",
+        );
     }
     if form.code.is_empty() {
         return token_error("invalid_grant", "code is required");
@@ -236,28 +292,73 @@ pub fn token_exchange(
     } else {
         code_data.server_url.trim_end_matches('/').to_string()
     };
-    match create_access_token(&issuer, &oauth.token_secret, OAUTH_TOKEN_TTL_SECONDS) {
-        Ok(access_token) => (
+    issue_token_pair(oauth, &issuer, &code_data.scope)
+}
+
+fn normalize_scope(scope: &str) -> String {
+    let mut scopes = scope
+        .split_whitespace()
+        .filter(|value| matches!(*value, "mcp" | "offline_access"))
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    if !scopes.iter().any(|value| value == "mcp") {
+        scopes.insert(0, "mcp".into());
+    }
+    if !scopes.iter().any(|value| value == "offline_access") {
+        scopes.push("offline_access".into());
+    }
+    scopes.sort();
+    scopes.dedup();
+    scopes.join(" ")
+}
+
+fn issue_token_pair(oauth: &OAuthRuntime, server_url: &str, scope: &str) -> Response {
+    let scope = normalize_scope(scope);
+    let access = create_token(
+        server_url,
+        &oauth.token_secret,
+        OAUTH_TOKEN_TTL_SECONDS,
+        &scope,
+        "access",
+    );
+    let refresh = create_token(
+        server_url,
+        &oauth.token_secret,
+        OAUTH_REFRESH_TOKEN_TTL_SECONDS,
+        &scope,
+        "refresh",
+    );
+    match (access, refresh) {
+        (Ok(access_token), Ok(refresh_token)) => (
             StatusCode::OK,
             axum::Json(json!({
                 "access_token": access_token,
+                "refresh_token": refresh_token,
                 "token_type": "Bearer",
-                "expires_in": OAUTH_TOKEN_TTL_SECONDS
+                "expires_in": OAUTH_TOKEN_TTL_SECONDS,
+                "scope": scope
             })),
         )
             .into_response(),
-        Err(_) => token_error("server_error", "Failed to issue access token"),
+        _ => token_error("server_error", "Failed to issue OAuth token"),
     }
 }
 
-fn create_access_token(server_url: &str, token_secret: &str, ttl: i64) -> Result<String, ()> {
+fn create_token(
+    server_url: &str,
+    token_secret: &str,
+    ttl: i64,
+    scope: &str,
+    token_kind: &str,
+) -> Result<String, ()> {
     let now = unix_now() as i64;
     let claims = TokenClaims {
         iss: server_url.to_string(),
         aud: server_url.to_string(),
         iat: now,
         exp: now + ttl,
-        scope: "mcp".into(),
+        scope: scope.into(),
+        token_kind: token_kind.into(),
     };
     encode(
         &Header::new(Algorithm::HS256),
@@ -351,6 +452,7 @@ mod tests {
                 code_challenge: challenge,
                 code_challenge_method: "S256".into(),
                 state: "state".into(),
+                scope: "mcp offline_access".into(),
             },
             "https://lb.example.com",
         );
@@ -370,6 +472,60 @@ mod tests {
                 code_verifier: verifier.into(),
                 client_id: "chatgpt-client-test".into(),
                 client_secret: String::new(),
+                refresh_token: String::new(),
+            },
+            "https://lb.example.com",
+        );
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn missing_oauth_bearer_advertises_protected_resource_metadata() {
+        let oauth = OAuthRuntime::new(
+            "https://lb.example.com".into(),
+            "chatgpt-client-test".into(),
+            None,
+            "token-signing-secret".into(),
+        );
+        let response =
+            verify_oauth_bearer_header(&HeaderMap::new(), &oauth, "https://lb.example.com")
+                .expect("missing bearer should be challenged");
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            response
+                .headers()
+                .get(WWW_AUTHENTICATE)
+                .and_then(|value| value.to_str().ok()),
+            Some(
+                "Bearer resource_metadata=\"https://lb.example.com/.well-known/oauth-protected-resource\", scope=\"mcp\""
+            )
+        );
+    }
+
+    #[test]
+    fn refresh_token_can_issue_a_new_access_token() {
+        let oauth = OAuthRuntime::new(
+            "https://lb.example.com".into(),
+            "chatgpt-client-test".into(),
+            None,
+            "token-signing-secret".into(),
+        );
+        let refresh = create_token(
+            "https://lb.example.com",
+            &oauth.token_secret,
+            OAUTH_REFRESH_TOKEN_TTL_SECONDS,
+            "mcp offline_access",
+            "refresh",
+        )
+        .expect("refresh token");
+        let response = token_exchange(
+            &oauth,
+            &HeaderMap::new(),
+            TokenForm {
+                grant_type: "refresh_token".into(),
+                client_id: "chatgpt-client-test".into(),
+                refresh_token: refresh,
+                ..TokenForm::default()
             },
             "https://lb.example.com",
         );

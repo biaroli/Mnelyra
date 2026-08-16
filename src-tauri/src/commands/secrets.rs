@@ -3,75 +3,6 @@ use tauri::{Manager, State};
 use crate::app_state::AppState;
 use crate::error::{AppError, AppResult};
 
-const ALLOWED_KEYS: &[&str] = &[
-    "oauth_client_secret",
-    "bearer_token",
-    "cloudflare_token",
-    "frp_token",
-];
-
-fn ensure_workspace_exists(state: &AppState, id: &str) -> AppResult<()> {
-    state.with_workspaces(|store| {
-        if store.get(id).is_some() {
-            Ok(())
-        } else {
-            Err(AppError::Message(format!("workspace not found: {id}")))
-        }
-    })
-}
-
-fn validate_key(key: &str) -> AppResult<()> {
-    if ALLOWED_KEYS.contains(&key) {
-        Ok(())
-    } else {
-        Err(AppError::Message(format!("invalid secret key: {key}")))
-    }
-}
-
-#[tauri::command]
-pub fn get_workspace_secret(
-    state: State<'_, AppState>,
-    id: String,
-    key: String,
-) -> AppResult<Option<String>> {
-    validate_key(&key)?;
-    ensure_workspace_exists(&state, &id)?;
-    state.with_data(|store| store.get_workspace_secret(&id, &key))
-}
-
-#[tauri::command]
-pub fn set_workspace_secret(
-    state: State<'_, AppState>,
-    id: String,
-    key: String,
-    value: String,
-) -> AppResult<()> {
-    validate_key(&key)?;
-    ensure_workspace_exists(&state, &id)?;
-    state.with_data(|store| store.set_workspace_secret(&id, &key, &value))
-}
-
-#[tauri::command]
-pub fn regenerate_workspace_secret(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-    id: String,
-    key: String,
-) -> AppResult<String> {
-    validate_key(&key)?;
-    ensure_workspace_exists(&state, &id)?;
-    let value = state.with_data(|store| store.regenerate_workspace_secret(&id, &key))?;
-    let profile = state.with_workspaces(|store| {
-        store
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| AppError::Message(format!("workspace not found: {id}")))
-    })?;
-
-    schedule_running_services_restart(app, vec![profile], key, false);
-    Ok(value)
-}
-
 const SHARED_KEYS: &[&str] = &[
     "oauth_client_id",
     "bearer_token",
@@ -131,7 +62,7 @@ pub fn set_shared_secret(
     })?;
     if changed {
         let workspaces = state.with_workspaces(|store| Ok(store.list().to_vec()))?;
-        schedule_running_services_restart(app, workspaces, key, true);
+        schedule_running_services_restart(app, workspaces, key);
     }
     Ok(())
 }
@@ -153,7 +84,7 @@ pub fn regenerate_shared_secret(
     let value = state.with_data(|store| store.regenerate_shared_secret(&key))?;
 
     let workspaces = state.with_workspaces(|store| Ok(store.list().to_vec()))?;
-    schedule_running_services_restart(app, workspaces, key, true);
+    schedule_running_services_restart(app, workspaces, key);
 
     Ok(value)
 }
@@ -162,14 +93,13 @@ fn schedule_running_services_restart(
     app: tauri::AppHandle,
     profiles: Vec<crate::workspace::WorkspaceProfile>,
     key: String,
-    shared: bool,
 ) {
     // Must stay on the async runtime: sync restart_mcp while a listener is
     // shutting down previously raced with form-save restart and could abort.
     tauri::async_runtime::spawn(async move {
         let state = app.state::<AppState>();
         for profile in &profiles {
-            restart_running_services_async(state.inner(), profile, &key, shared).await;
+            restart_running_services_async(state.inner(), profile, &key).await;
         }
     });
 }
@@ -182,10 +112,8 @@ async fn restart_running_services_async(
     state: &AppState,
     profile: &crate::workspace::WorkspaceProfile,
     key: &str,
-    shared: bool,
 ) {
-    let should_restart_mcp = shared
-        && MCP_SHARED_KEYS.contains(&key)
+    let should_restart_mcp = MCP_SHARED_KEYS.contains(&key)
         && state
             .with_runtime(|runtime| {
                 Ok(runtime.is_running(&profile.id, crate::runtime::ServiceKind::Mcp))

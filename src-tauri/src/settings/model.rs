@@ -167,7 +167,6 @@ impl AppSettings {
     /// runtime services always receive this effective global configuration.
     pub fn apply_global_auth(&self, profile: &mut WorkspaceProfile) {
         profile.auth.auth_type = normalize_mcp_auth_type(&self.auth.mcp_auth_type);
-        profile.auth.use_shared_secrets = true;
         if let Some(client_id) = self.shared_secrets.get("oauth_client_id") {
             profile.auth.oauth_client_id = client_id.clone();
         }
@@ -236,8 +235,8 @@ mod tests {
     use super::{normalize_mcp_auth_type, FrpProfile};
 
     #[test]
-    fn legacy_noauth_falls_back_to_oauth() {
-        assert_eq!(normalize_mcp_auth_type("noauth"), "oauth");
+    fn unsupported_legacy_auth_falls_back_to_oauth() {
+        assert_eq!(normalize_mcp_auth_type("legacy-none"), "oauth");
         assert_eq!(normalize_mcp_auth_type("anything-else"), "oauth");
     }
 

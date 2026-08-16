@@ -132,6 +132,10 @@ impl DataStore {
                     changed |= secrets.remove(key).is_some();
                 }
             }
+            if !data.workspace_secrets.is_empty() {
+                data.workspace_secrets.clear();
+                changed = true;
+            }
             if let Some(tunnel) = data.app_secrets.get_mut("global_tunnel") {
                 changed |= tunnel.remove("actions_frp_token").is_some();
             }
@@ -236,13 +240,6 @@ impl DataStore {
         Ok(Some(removed))
     }
 
-    pub fn init_workspace_secrets(&mut self, profile_id: &str) -> AppResult<()> {
-        self.set_workspace_secret(profile_id, "oauth_client_secret", &random_secret())?;
-        self.set_workspace_secret(profile_id, "oauth_token_secret", &random_secret())?;
-        self.set_workspace_secret(profile_id, "bearer_token", &random_secret())?;
-        Ok(())
-    }
-
     pub fn init_shared_secrets(&mut self) -> AppResult<()> {
         let mut changed = false;
         for key in SHARED_KEYS {
@@ -257,45 +254,6 @@ impl DataStore {
             self.save()?;
         }
         Ok(())
-    }
-
-    pub fn get_workspace_secret(&self, profile_id: &str, key: &str) -> AppResult<Option<String>> {
-        Ok(self
-            .data
-            .workspace_secrets
-            .get(profile_id)
-            .and_then(|secrets| secrets.get(key))
-            .filter(|value| !value.is_empty())
-            .cloned())
-    }
-
-    pub fn set_workspace_secret(
-        &mut self,
-        profile_id: &str,
-        key: &str,
-        value: &str,
-    ) -> AppResult<()> {
-        self.data
-            .workspace_secrets
-            .entry(profile_id.to_string())
-            .or_default()
-            .insert(key.to_string(), value.to_string());
-        self.save()
-    }
-
-    pub fn regenerate_workspace_secret(
-        &mut self,
-        profile_id: &str,
-        key: &str,
-    ) -> AppResult<String> {
-        let value = shared_value_for_key(key);
-        self.set_workspace_secret(profile_id, key, &value)?;
-        Ok(value)
-    }
-
-    pub fn remove_workspace_secrets(&mut self, profile_id: &str) -> AppResult<()> {
-        self.data.workspace_secrets.remove(profile_id);
-        self.save()
     }
 
     pub fn get_shared_secret(&self, key: &str) -> Option<String> {
@@ -365,20 +323,6 @@ fn shared_value_for_key(key: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn workspace_secret_roundtrip() {
-        let id = uuid::Uuid::new_v4().to_string().replace('-', "");
-        let mut store = DataStore::load().expect("load");
-        store
-            .set_workspace_secret(&id, "oauth_client_secret", "roundtrip-secret")
-            .expect("set");
-        let loaded = store
-            .get_workspace_secret(&id, "oauth_client_secret")
-            .expect("get");
-        assert_eq!(loaded.as_deref(), Some("roundtrip-secret"));
-        store.remove_workspace_secrets(&id).expect("remove");
-    }
 
     #[test]
     fn shared_oauth_client_id_uses_client_id_format() {

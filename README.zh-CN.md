@@ -161,7 +161,7 @@ https://mcp.example.com/mcp
 
 ### OpenAI 安全连接
 
-连接页可以保存 Tunnel ID 和 OpenAI API Key，并建立 OpenAI 平台使用的安全 MCP 链路。它与普通 Cloudflare / FRP 公网路由是独立入口。
+连接页可以保存 Tunnel ID 和 OpenAI API Key，并建立 OpenAI 平台使用的安全 MCP 链路。该专线使用内部隧道凭证，不再叠加 Mnelyra OAuth；它与普通 Cloudflare / FRP 公网路由相互独立。
 
 ## 从源码运行
 

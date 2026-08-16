@@ -32,8 +32,8 @@ mod tests {
     }
 
     #[test]
-    fn rejects_legacy_noauth_mode() {
-        assert!(validate_auth(&auth("noauth")).is_err());
+    fn rejects_unsupported_auth_mode() {
+        assert!(validate_auth(&auth("internal")).is_err());
     }
 }
 

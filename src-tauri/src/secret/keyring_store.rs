@@ -13,17 +13,6 @@ impl SecretStore {
         Ok(value)
     }
 
-    pub fn get(profile_id: &str, key: &str) -> AppResult<Option<String>> {
-        DataStore::read_file(|data| {
-            Ok(data
-                .workspace_secrets
-                .get(profile_id)
-                .and_then(|secrets| secrets.get(key))
-                .filter(|value| !value.is_empty())
-                .cloned())
-        })
-    }
-
     pub fn get_shared(key: &str) -> AppResult<Option<String>> {
         DataStore::read_file(|data| Ok(data.shared_secrets.get(key).cloned()))
     }

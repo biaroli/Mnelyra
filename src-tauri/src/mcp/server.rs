@@ -381,7 +381,7 @@ mod tests {
         assert_eq!(structured["session_key_source"], "platform_conversation_id");
         assert_eq!(structured["session_key"], "chatgpt-session");
         assert_eq!(structured["initial_input_captured"], true);
-        let content = fs::read_to_string(workspace.path().join(".rootrelay/history-session/1.md"))
+        let content = fs::read_to_string(workspace.path().join(".mnelyra/history-session/1.md"))
             .expect("read history file");
         assert!(content.contains("**Session key:** chatgpt-session"));
         assert!(!content.contains("**Session key:** explicit-session"));

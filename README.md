@@ -161,7 +161,7 @@ If you operate an FRPS server, enter its server, port, subdomain, and token on t
 
 ### OpenAI secure connection
 
-The Connections page can store a Tunnel ID and OpenAI API Key and start the secure MCP path used by the OpenAI platform. This path is independent from normal Cloudflare/FRP public routing.
+The Connections page can store a Tunnel ID and OpenAI API Key and start the secure MCP path used by the OpenAI platform. This path uses its private tunnel credential and does not add a second Mnelyra OAuth login; it is independent from normal Cloudflare/FRP public routing.
 
 ## Run from source
 

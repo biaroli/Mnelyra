@@ -260,12 +260,7 @@ pub fn spawn_listener(
         runtime.permission_mode.clone(),
     );
     let bearer_token = if auth.bearer_enabled() {
-        let key = "bearer_token";
-        if auth.use_shared_secrets {
-            SecretStore::get_shared(key).map_err(|e| e.to_string())?
-        } else {
-            SecretStore::get(&workspace_id, key).map_err(|e| e.to_string())?
-        }
+        SecretStore::get_shared("bearer_token").map_err(|e| e.to_string())?
     } else {
         None
     };
@@ -554,6 +549,9 @@ async fn oauth_authorization_server_metadata(
     State(state): State<ListenerState>,
     headers: HeaderMap,
 ) -> Response {
+    if tunnel_client_authorized(&headers) {
+        return oauth_not_configured();
+    }
     if !state.auth.oauth_enabled() {
         return oauth_not_configured();
     }
@@ -569,6 +567,9 @@ async fn oauth_protected_resource_metadata(
     State(state): State<ListenerState>,
     headers: HeaderMap,
 ) -> Response {
+    if tunnel_client_authorized(&headers) {
+        return oauth_not_configured();
+    }
     if !state.auth.oauth_enabled() {
         return oauth_not_configured();
     }
