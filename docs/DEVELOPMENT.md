@@ -88,7 +88,7 @@ Changing the permission ceiling must affect the running system, not only persist
 
 Authentication is installation-level and remains stable while Workspaces change. OAuth uses one persistent installation Client ID, PKCE authorization codes, a rotatable connection secret, and internal signing material that is never exposed through the frontend.
 
-Bearer-token authentication is available when OAuth is unnecessary. No-auth mode is intended only for trusted local use. Public endpoints should use authentication.
+Bearer-token authentication is available when OAuth is unnecessary. User-configurable MCP authentication is limited to OAuth and bearer tokens; legacy `noauth` settings are normalized back to OAuth when loaded.
 
 New Client IDs use the `mnelyra-client-` prefix. Do not introduce a second authentication model for a specific Workspace or routing provider.
 
@@ -137,6 +137,10 @@ Generated directories such as `node_modules`, `.svelte-kit`, `build`, and `src-t
 ## Release process
 
 Release versions must match in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`. The current GitHub workflow builds Windows NSIS and macOS universal packages, uploads updater artifacts, and publishes a GitHub Release when a `v*` tag is pushed.
+
+OTA compatibility depends on the updater public key embedded in `tauri.conf.json` matching the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Keep `bundle.createUpdaterArtifacts` enabled and keep `uploadUpdaterJson`, `uploadUpdaterSignatures`, and `updaterJsonPreferNsis` enabled in the release workflow. Do not rotate the updater key casually: already-installed clients trust the embedded public key.
+
+Release clients check the GitHub `latest.json` endpoint at startup. When a newer signed build exists, Mnelyra offers to download and install it in-app and relaunch after installation.
 
 Before tagging, run the full checks above and verify the README images, release links, updater endpoint, and public documentation against the current UI. Then commit the release state, push `main`, create the version tag, and push the tag.
 

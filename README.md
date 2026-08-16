@@ -49,7 +49,7 @@ Application-level settings stay in one place: local MCP service, permission ceil
 
 ### Stable connection identity
 
-OAuth, bearer token, and trusted local no-auth modes are supported. The installation-level OAuth Client ID stays stable while connection credentials can be rotated; switching projects does not require a new client identity.
+OAuth and bearer token authentication are supported. The installation-level OAuth Client ID stays stable while connection credentials can be rotated; switching projects does not require a new client identity.
 
 ![Mnelyra Authentication](static/readme/mnelyra-authentication.png)
 
@@ -67,7 +67,7 @@ The client connection and project root are separate. Import projects once, then 
 
 ### 1. Install
 
-Download the current build from [GitHub Releases](https://github.com/biaroli/Mnelyra/releases/latest).
+Download the current build from [GitHub Releases](https://github.com/biaroli/Mnelyra/releases/latest). Release builds check GitHub Releases at startup and can verify, download, and apply signed updates in-app when a newer version is available.
 
 | Platform | Package |
 | --- | --- |
@@ -99,7 +99,7 @@ http://127.0.0.1:28766/mcp
 
 ### 4. Configure authentication and connect a client
 
-Open **Settings → Authentication**. OAuth is recommended for a public MCP endpoint; bearer token is also available. Trusted local-only use can run without authentication.
+Open **Settings → Authentication**. OAuth is recommended for a public MCP endpoint; bearer token is also available.
 
 Enter the `/mcp` URL shown by Mnelyra into ChatGPT, Claude, or another client that supports custom MCP servers. A first connection check can call:
 

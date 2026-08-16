@@ -5,13 +5,36 @@ use crate::error::{AppError, AppResult};
 use crate::settings::GlobalAuthConfig;
 
 fn validate_auth(auth: &GlobalAuthConfig) -> AppResult<()> {
-    if !matches!(auth.mcp_auth_type.as_str(), "oauth" | "bearer" | "noauth") {
+    if !matches!(auth.mcp_auth_type.as_str(), "oauth" | "bearer") {
         return Err(AppError::Message(format!(
             "不支持的 MCP 认证方式: {}",
             auth.mcp_auth_type
         )));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_auth;
+    use crate::settings::GlobalAuthConfig;
+
+    fn auth(mode: &str) -> GlobalAuthConfig {
+        GlobalAuthConfig {
+            mcp_auth_type: mode.to_string(),
+        }
+    }
+
+    #[test]
+    fn accepts_supported_auth_modes() {
+        assert!(validate_auth(&auth("oauth")).is_ok());
+        assert!(validate_auth(&auth("bearer")).is_ok());
+    }
+
+    #[test]
+    fn rejects_legacy_noauth_mode() {
+        assert!(validate_auth(&auth("noauth")).is_err());
+    }
 }
 
 #[tauri::command]

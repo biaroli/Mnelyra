@@ -119,7 +119,6 @@
           >
             <option value="oauth">OAuth</option>
             <option value="bearer">Bearer Token</option>
-            <option value="noauth">{zh ? "不启用认证" : "No authentication"}</option>
           </select>
         </label>
 

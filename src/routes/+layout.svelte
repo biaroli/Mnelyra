@@ -38,7 +38,11 @@
   import { startUiMemoryGuard } from "$lib/ui-memory-guard";
   import { startCloseGuard } from "$lib/close-guard";
   import CloseConfirmDialog from "$lib/components/CloseConfirmDialog.svelte";
-  import { checkForUpdates, updateState } from "$lib/stores/update";
+  import {
+    checkForUpdates,
+    installAvailableUpdate,
+    updateState,
+  } from "$lib/stores/update";
   import { uiLocale } from "$lib/stores/locale";
   import type { RuntimeState } from "$lib/types";
   import { workspaceRootName, type WorkspaceProfile } from "$lib/types";
@@ -219,6 +223,34 @@
     goto("/memory");
   }
 
+  async function checkStartupUpdate() {
+    const state = await checkForUpdates();
+    if (state.phase !== "available" || !state.latestVersion) return;
+
+    const accepted = await confirm(
+      zh
+        ? `发现 Mnelyra v${state.latestVersion}。现在下载并安装更新？安装完成后会自动重启。`
+        : `Mnelyra v${state.latestVersion} is available. Download and install it now? Mnelyra will restart when installation finishes.`,
+      {
+        title: zh ? "Mnelyra 更新" : "Mnelyra Update",
+        kind: "info",
+        okLabel: zh ? "立即更新" : "Update now",
+        cancelLabel: zh ? "稍后" : "Later",
+      },
+    );
+    if (!accepted) return;
+
+    try {
+      await installAvailableUpdate();
+    } catch (error) {
+      showToast(String(error), {
+        title: zh ? "更新失败" : "Update failed",
+        kind: "error",
+        duration: 8000,
+      });
+    }
+  }
+
   onMount(() => {
     const stopGuard = startUiMemoryGuard();
     const stopClose = startCloseGuard(() => {
@@ -236,7 +268,7 @@
         }
       }
     })();
-    void checkForUpdates();
+    void checkStartupUpdate();
     void refreshProviders();
     const authorityTimer = window.setInterval(() => {
       void refreshAuthority();

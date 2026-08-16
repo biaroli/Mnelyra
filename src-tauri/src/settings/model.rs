@@ -57,7 +57,7 @@ impl Default for GlobalAuthConfig {
 impl GlobalAuthConfig {
     pub(crate) fn from_profile(profile: &WorkspaceProfile) -> Self {
         Self {
-            mcp_auth_type: profile.auth.auth_type.clone(),
+            mcp_auth_type: normalize_mcp_auth_type(&profile.auth.auth_type),
         }
     }
 }
@@ -149,6 +149,14 @@ fn default_mcp_auth_type() -> String {
     "oauth".to_string()
 }
 
+fn normalize_mcp_auth_type(value: &str) -> String {
+    match value.trim() {
+        "bearer" => "bearer".to_string(),
+        "oauth" => "oauth".to_string(),
+        _ => default_mcp_auth_type(),
+    }
+}
+
 fn default_permission_ceiling() -> String {
     "automatic".to_string()
 }
@@ -158,7 +166,7 @@ impl AppSettings {
     /// Workspace auth fields are retained on disk only for backward compatibility;
     /// runtime services always receive this effective global configuration.
     pub fn apply_global_auth(&self, profile: &mut WorkspaceProfile) {
-        profile.auth.auth_type = self.auth.mcp_auth_type.clone();
+        profile.auth.auth_type = normalize_mcp_auth_type(&self.auth.mcp_auth_type);
         profile.auth.use_shared_secrets = true;
         if let Some(client_id) = self.shared_secrets.get("oauth_client_id") {
             profile.auth.oauth_client_id = client_id.clone();
@@ -176,7 +184,9 @@ impl AppSettings {
             frp_profiles: data.frp_profiles.clone(),
             last_workspace_id: data.last_workspace_id.clone(),
             download: data.download.clone(),
-            auth: data.auth.clone(),
+            auth: GlobalAuthConfig {
+                mcp_auth_type: normalize_mcp_auth_type(&data.auth.mcp_auth_type),
+            },
             general: data.general.clone(),
             openai_connector: data.openai_connector.clone(),
             shared_secrets: data.shared_secrets.clone(),
@@ -223,7 +233,19 @@ impl FrpProfile {
 
 #[cfg(test)]
 mod tests {
-    use super::FrpProfile;
+    use super::{normalize_mcp_auth_type, FrpProfile};
+
+    #[test]
+    fn legacy_noauth_falls_back_to_oauth() {
+        assert_eq!(normalize_mcp_auth_type("noauth"), "oauth");
+        assert_eq!(normalize_mcp_auth_type("anything-else"), "oauth");
+    }
+
+    #[test]
+    fn supported_auth_modes_are_preserved() {
+        assert_eq!(normalize_mcp_auth_type("oauth"), "oauth");
+        assert_eq!(normalize_mcp_auth_type("bearer"), "bearer");
+    }
 
     #[test]
     fn accepts_frontend_camel_case_server_port() {
