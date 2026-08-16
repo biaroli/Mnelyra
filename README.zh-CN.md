@@ -4,10 +4,10 @@
 
 <h1 align="center">Mnelyra</h1>
 
-<h3 align="center">让 ChatGPT、Claude、Codex 和任意 MCP 客户端，共用同一个本地工作区与同一份项目记忆。</h3>
+<h3 align="center">让 ChatGPT、Claude 和任意 MCP 客户端，共用同一个本地工作区与同一份项目记忆。</h3>
 
 <p align="center">
-  <strong>不接 Codex 也能直接读写文件、运行命令和测试；需要时再接入 Codex。额度紧张时，还可以把 ChatGPT Web 订阅作为另一条模型通道接进开发工作流。</strong>
+  <strong>上游可以直接通过 MCP 读写文件、运行命令和测试；还可以把 ChatGPT Web 订阅作为另一条模型通道接进工作流。</strong>
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0">
 </p>
 
-Mnelyra 把一个真实的本地项目目录变成所有上游 AI 都能共同使用的工作区。ChatGPT、Claude 或其他 MCP 客户端可以直接从网页读取和修改文件、搜索项目、应用 Patch、执行命令和测试、检查 Git、查看图片；Codex 是可选增强，不是前置条件。
+Mnelyra 把一个真实的本地项目目录变成所有上游 AI 都能共同使用的工作区。ChatGPT、Claude 或其他 MCP 客户端可以直接从网页读取和修改文件、搜索项目、应用 Patch、执行命令和测试、检查 Git、查看图片。
 
 工作区同时也是记忆边界。你可以从一个上游切到另一个上游，开发历史、当前焦点、最近变化和未完成事项仍然跟着项目走，而不是锁死在某个聊天窗口或某一家模型里。
 
@@ -31,9 +31,9 @@ Mnelyra 把一个真实的本地项目目录变成所有上游 AI 都能共同�
 
 ## 为什么用 Mnelyra
 
-| ChatGPT Web 作为额外模型通道 | 一个工作区，共享一份记忆 | Codex 可接可不接 |
+| ChatGPT Web 作为额外模型通道 | 一个工作区，共享一份记忆 | 直接操作项目 |
 | --- | --- | --- |
-| 可选接入 ChatGPT Web bridge，把你自己的 ChatGPT Web 订阅作为另一条模型通道，降低对单一 Codex / API 配额的依赖。 | ChatGPT、Claude、Codex 和其他 MCP 上游围绕同一个 Workspace 工作，历史与恢复状态跟着项目走。 | 任何兼容 MCP 的上游都可以直接操作工作区；需要 Codex harness 时再接入，不需要为了使用 Mnelyra 先启动 Codex。 |
+| 可选接入 ChatGPT Web bridge，把你自己的 ChatGPT Web 订阅作为另一条模型通道。 | ChatGPT、Claude 和其他 MCP 上游围绕同一个 Workspace 工作，历史与恢复状态跟着项目走。 | 任何兼容 MCP 的上游都可以直接使用 Mnelyra 的文件、命令、Git、测试、图片和历史工具操作工作区。 |
 
 ## 功能一览
 
@@ -53,9 +53,9 @@ Mnelyra 把一个真实的本地项目目录变成所有上游 AI 都能共同�
 
 ![Mnelyra 认证页](static/readme/mnelyra-authentication.png)
 
-### 不依赖 Codex，也能直接改项目
+### 直接改项目
 
-MCP 本身就提供文件读取与修改、搜索、Patch、命令执行、测试、Git、图片和历史工具。当前 Workspace 就是这些工具的项目根目录。Codex 是可选 harness，不是 Mnelyra 的启动条件。
+MCP 本身就提供文件读取与修改、搜索、Patch、命令执行、测试、Git、图片和历史工具。当前 Workspace 就是这些工具的项目根目录。
 
 ## 工作方式
 
@@ -113,13 +113,13 @@ git_status
 
 ## ChatGPT Web 通道
 
-Mnelyra 可以把 Codex 作为可选 provider 接入，而不是把 Codex 设为整个系统的前置条件。配合 ChatGPT Web bridge，可以把 ChatGPT 网页订阅作为额外模型通道，用在现有 Workspace、MCP 工具和项目记忆之上。
+配合 ChatGPT Web bridge，可以把 ChatGPT 网页订阅作为额外模型通道，用在现有 Workspace、MCP 工具和项目记忆之上。
 
-这条路径适合在单一 Codex / API 配额紧张时切换模型通道，但它仍然使用你自己的 ChatGPT 账号与订阅能力，也受 ChatGPT 当前账号权限、产品能力和网页界面变化影响。
+这条路径适合在单一 API 或账号额度紧张时切换模型通道，但它仍然使用你自己的 ChatGPT 账号与订阅能力，也受 ChatGPT 当前账号权限、产品能力和网页界面变化影响。
 
 ## 工作区记忆
 
-Mnelyra 的记忆跟 Workspace 走。不同上游可以围绕同一个项目继续工作，不需要把“记忆”绑定到某一个 ChatGPT 会话、Claude 会话或 Codex task。
+Mnelyra 的记忆跟 Workspace 走。不同上游可以围绕同一个项目继续工作，不需要把“记忆”绑定到某一个 ChatGPT 或 Claude 会话。
 
 公开的 history 工具包括：
 
@@ -143,7 +143,7 @@ Mnelyra 的记忆跟 Workspace 走。不同上游可以围绕同一个项目继�
 | **只读** | 顶层阻止写入、Patch 和命令执行等可变更操作 |
 | **工作区读写** | 允许 Workspace 内读写和网络访问；文件操作仍以当前 Workspace 为边界 |
 
-Windows 下的 Codex 可选集成还保留 workspace sandbox 与 MiKTeX 兼容配置；这不等于任意宿主机文件系统访问。
+Windows 下的 OpenAI 编码链路保留 workspace sandbox 与 MiKTeX 兼容配置；这不等于任意宿主机文件系统访问。
 
 ## 公网路由
 
@@ -199,8 +199,6 @@ ChatGPT Web bridge 属于非官方浏览器集成，网页 UI 或账号能力变
 Mnelyra 使用 [Apache License 2.0](LICENSE)。
 
 ## 鸣谢
-
-Mnelyra 此前以 RootRelay 与 Codex-Web 名义发布。
 
 感谢 [miuuyy/codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web)、[mybolide/coding-tools-mcp](https://github.com/mybolide/coding-tools-mcp)、[xyTom/coding-tools-mcp](https://github.com/xyTom/coding-tools-mcp)、[Tauri](https://github.com/tauri-apps/tauri)、[Svelte](https://github.com/sveltejs/svelte) 及其贡献者。Copyright 2026 Coding Tools MCP Contributors。
 

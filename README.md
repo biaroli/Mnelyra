@@ -4,10 +4,10 @@
 
 <h1 align="center">Mnelyra</h1>
 
-<h3 align="center">One local workspace and one project memory for ChatGPT, Claude, Codex, and any MCP-compatible client.</h3>
+<h3 align="center">One local workspace and one project memory for ChatGPT, Claude, and any MCP-compatible client.</h3>
 
 <p align="center">
-  <strong>Codex is optional: remote clients can edit files, run commands, and test projects directly through MCP. When quota gets tight, an optional ChatGPT Web bridge can add your ChatGPT Web subscription as another model path.</strong>
+  <strong>Remote clients can edit files, run commands, and test projects directly through MCP. An optional ChatGPT Web bridge can also add your ChatGPT Web subscription as another model path.</strong>
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0">
 </p>
 
-Mnelyra turns a real local project directory into a workspace that multiple AI clients can share. ChatGPT, Claude, or any compatible MCP client can read and edit files, search the project, apply patches, run commands and tests, inspect Git, and view images directly from the remote chat surface. Codex can be attached when you want its harness, but it is not required to use Mnelyra.
+Mnelyra turns a real local project directory into a workspace that multiple AI clients can share. ChatGPT, Claude, or any compatible MCP client can read and edit files, search the project, apply patches, run commands and tests, inspect Git, and view images directly from the remote chat surface.
 
 The Workspace is also the memory boundary. Move from one upstream client to another and the project history, current focus, recent changes, and open work can stay with the project instead of being trapped in one chat window or one model provider.
 
@@ -31,9 +31,9 @@ The Workspace is also the memory boundary. Move from one upstream client to anot
 
 ## Why Mnelyra
 
-| ChatGPT Web as another model path | One workspace, shared memory | Codex is optional |
+| ChatGPT Web as another model path | One workspace, shared memory | Direct project control |
 | --- | --- | --- |
-| Optionally connect a ChatGPT Web bridge and use your own ChatGPT Web subscription as an additional model path instead of depending on one Codex/API quota. | ChatGPT, Claude, Codex, and other MCP upstreams can work around the same Workspace while project history and recovery state stay with that Workspace. | Any MCP-compatible upstream can operate the Workspace directly. Attach the Codex harness only when you want it; Mnelyra does not require Codex to expose local tools. |
+| Optionally connect a ChatGPT Web bridge and use your own ChatGPT Web subscription as an additional model path. | ChatGPT, Claude, and other MCP upstreams can work around the same Workspace while project history and recovery state stay with that Workspace. | Any MCP-compatible upstream can operate the Workspace directly through Mnelyra's file, shell, Git, test, image, and history tools. |
 
 ## Feature tour
 
@@ -53,9 +53,9 @@ OAuth, bearer token, and trusted local no-auth modes are supported. The installa
 
 ![Mnelyra Authentication](static/readme/mnelyra-authentication.png)
 
-### Direct project control without Codex
+### Direct project control
 
-MCP already exposes file reads and edits, search, patches, commands, tests, Git, images, and history tools rooted at the active Workspace. Codex is an optional harness, not a prerequisite for Mnelyra.
+MCP exposes file reads and edits, search, patches, commands, tests, Git, images, and history tools rooted at the active Workspace.
 
 ## How it fits together
 
@@ -113,13 +113,13 @@ git_status
 
 ## ChatGPT Web path
 
-Mnelyra can attach Codex as an optional provider instead of making Codex a prerequisite for the whole system. With the ChatGPT Web bridge, a ChatGPT Web subscription can become an additional model path on top of the same Workspace, MCP tools, and project memory.
+With the ChatGPT Web bridge, a ChatGPT Web subscription can become an additional model path on top of the same Workspace, MCP tools, and project memory.
 
-This is useful when a single Codex/API quota is constrained, but it still uses your own ChatGPT account and the capabilities available to that account. Browser integration can also be affected by changes to the ChatGPT web UI.
+This can provide another model path when one API or account quota is constrained, but it still uses your own ChatGPT account and the capabilities available to that account. Browser integration can also be affected by changes to the ChatGPT web UI.
 
 ## Workspace memory
 
-Mnelyra memory follows the Workspace. Different upstream clients can continue work on the same project without treating one ChatGPT conversation, Claude conversation, or Codex task as the only source of project continuity.
+Mnelyra memory follows the Workspace. Different upstream clients can continue work on the same project without treating one ChatGPT or Claude conversation as the only source of project continuity.
 
 The public history tools are:
 
@@ -143,7 +143,7 @@ Developer mode exposes one application-level permission ceiling:
 | **Read only** | Blocks writes, patches, command execution, and other mutating operations at the Mnelyra layer |
 | **Workspace read/write** | Allows reads, writes, and network access inside the active Workspace boundary |
 
-On Windows, the optional Codex integration keeps its workspace sandbox and scoped MiKTeX compatibility setup. This is not unrestricted host-filesystem access.
+On Windows, the OpenAI coding path keeps its workspace sandbox and scoped MiKTeX compatibility setup. This is not unrestricted host-filesystem access.
 
 ## Public routing
 
@@ -199,8 +199,6 @@ The ChatGPT Web bridge is an unofficial browser integration and can be affected 
 Mnelyra is licensed under the [Apache License 2.0](LICENSE).
 
 ## Acknowledgements
-
-Mnelyra was previously released as RootRelay and Codex-Web.
 
 Thanks to [miuuyy/codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web), [mybolide/coding-tools-mcp](https://github.com/mybolide/coding-tools-mcp), [xyTom/coding-tools-mcp](https://github.com/xyTom/coding-tools-mcp), [Tauri](https://github.com/tauri-apps/tauri), [Svelte](https://github.com/sveltejs/svelte), and their contributors. Copyright 2026 Coding Tools MCP Contributors.
 

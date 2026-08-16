@@ -172,7 +172,7 @@
             <i class:ok={status?.healthy}></i>
             <div>
               <strong>{status?.ready ? (zh ? "安全连接已可用" : "Secure connection is ready") : (zh ? "正在建立安全连接" : "Establishing secure connection")}</strong>
-              <span>{zh ? "OpenAI 平台可通过 Mnelyra 访问当前工作区和 Codex。" : "OpenAI clients can reach the active workspace and Codex through Mnelyra."}</span>
+              <span>{zh ? "ChatGPT 可通过 Mnelyra 访问当前工作区。" : "ChatGPT can reach the active workspace through Mnelyra."}</span>
             </div>
           </div>
           <button class="mn-mini-action danger" type="button" disabled={busy} onclick={() => void stop()}><CircleStop size={12} /> {zh ? "断开" : "Stop"}</button>

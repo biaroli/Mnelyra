@@ -208,7 +208,7 @@
               <div>
                 <span>PERMISSION CEILING</span>
                 <strong>{zh ? "权限总阀门" : "Permission ceiling"}</strong>
-                <small>{zh ? "限制 Mnelyra、Codex 与 MCP 能达到的最高权限；下游自己的限制仍然有效。" : "Caps the maximum access available to Mnelyra, Codex, and MCP. Stricter downstream limits still apply."}</small>
+                <small>{zh ? "限制 Mnelyra 与 MCP 能达到的最高权限；下游自己的限制仍然有效。" : "Caps the maximum access available to Mnelyra and MCP. Stricter downstream limits still apply."}</small>
               </div>
               <b>{general.permissionCeiling.replaceAll("_", " ").toUpperCase()}</b>
             </div>

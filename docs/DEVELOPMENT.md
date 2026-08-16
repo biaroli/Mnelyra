@@ -1,146 +1,149 @@
-# Mnelyra development
+# Developing Mnelyra
 
-This repository contains one desktop application. The SvelteKit frontend lives in `src/`; the Tauri/Rust runtime lives in `src-tauri/`.
+Mnelyra is a Tauri 2 desktop application with a SvelteKit frontend and a Rust runtime. The product turns one local project directory into an active Workspace that ChatGPT, Claude, and other MCP-compatible upstreams can operate through a stable MCP connection.
+
+This document is for maintainers. User-facing setup and product behavior belong in the root [README](../README.md).
+
+## Repository layout
+
+| Path | Purpose |
+| --- | --- |
+| `src/routes/` | Desktop pages and page-level UI |
+| `src/lib/` | Shared components, stores, frontend API bindings, and types |
+| `src-tauri/src/mcp/` | MCP transport and server integration |
+| `src-tauri/src/tools/` | Workspace tools, schemas, policy checks, and dispatch |
+| `src-tauri/src/workspace/` | Workspace import, activation, and resource handling |
+| `src-tauri/src/session/` | Workspace memory and session continuity |
+| `src-tauri/src/provider/` | Optional provider-side integration paths |
+| `src-tauri/src/runtime/` | Local runtime supervision and process lifecycle |
+| `src-tauri/src/tunnel/` | OpenAI secure connection, Cloudflare, and FRP routing |
+| `src-tauri/src/auth/` | MCP authentication and OAuth flow |
+| `static/readme/` | Public README screenshots and architecture artwork |
+| `.github/workflows/release.yml` | Tagged Windows/macOS release pipeline |
 
 ## Local development
 
-Install JavaScript dependencies once:
+Install dependencies once, then start the desktop application:
 
 ```bash
 npm ci
-```
-
-Run the desktop application:
-
-```bash
 npm run desktop
 ```
 
-Run the frontend only:
+`npm run desktop` starts Tauri and the Vite frontend together. Mnelyra owns Vite port `1421`; remote HMR uses `1422`. Keep those ports stable because the Tauri development URL is fixed to `http://localhost:1421`.
+
+For frontend-only work:
 
 ```bash
 npm run dev
 ```
 
-Codex-backed features require a working Codex CLI. Mnelyra discovers `codex` from `PATH`; `MNELYRA_CODEX_BIN` can point to an exact executable/script when discovery is not appropriate.
+The optional ChatGPT coding path currently uses the OpenAI coding runtime internally. Normal discovery uses the executable available on `PATH`; `MNELYRA_CODEX_BIN` can point to an exact executable when a development environment needs to override discovery. This is an implementation detail and should not appear as a separate user-facing product in the UI.
+
+## Runtime architecture
+
+The public architecture is documented in [`static/readme/mnelyra-architecture.svg`](../static/readme/mnelyra-architecture.svg). The important boundary is the Workspace: Mnelyra has one active Workspace at a time, and all workspace-scoped tools resolve against that project root.
+
+MCP clients connect through the local MCP service or one of the configured remote routes. The routing layer does not own project state. Switching the active Workspace rebinds execution to the new project while the client-facing Mnelyra connection remains stable.
+
+The optional ChatGPT Web bridge is a provider path, not a second Workspace. It can supply another model path while MCP tools, project state, and Workspace continuity remain owned by Mnelyra.
+
+## Workspace activation
+
+Workspace selection is an execution change, not a visual preference. A successful switch updates the active root, refreshes workspace-scoped runtime state, and ensures subsequent tool calls resolve against the selected project.
+
+Do not add a second “start Workspace” action after selection. Selecting a Workspace is the activation action.
+
+Application-level settings such as authentication, connection routing, permission ceiling, and developer controls are shared across imported Workspaces. Project-specific state stays with the Workspace.
+
+## MCP tools
+
+The MCP surface is intentionally workspace-oriented. File reads and edits, search, patches, command execution, tests, Git operations, image inspection, and history tools all resolve through the same active root and the same policy layer.
+
+Tool exposure and tool execution are separate checks. When a mode should hide a mutating capability, omit it from the advertised catalog where practical, but still reject the mutation again in the dispatcher. Do not treat catalog filtering as a security boundary by itself.
+
+## Workspace memory
+
+Memory follows the Workspace rather than a particular upstream chat. Session bootstrap, checkpoint, search, read, and validation tools preserve project continuity across ChatGPT, Claude, and other MCP clients.
+
+The Markdown archive is the durable history. Derived state such as current focus, recent changes, open work, and provider checkpoints exists to make recovery fast; it must never replace or silently rewrite the durable history source.
+
+Empty derived state should remain empty. Do not invent placeholder checkpoints, synthetic counts, or explanatory records just to give the UI something to render.
+
+## Permission ceiling
+
+The application-level permission ceiling has three user-facing modes:
+
+| Mode | Runtime meaning |
+| --- | --- |
+| **Automatic** | Mnelyra adds no extra restriction beyond the active downstream policy |
+| **Read only** | Mutating tools and mutating coding operations are blocked |
+| **Workspace read/write** | Workspace reads and writes are allowed; the coding runtime keeps its workspace sandbox and configured network behavior |
+
+On Windows, the workspace read/write mode keeps the elevated sandbox integration used by the coding runtime. MiKTeX compatibility is scoped to a detected local MiKTeX installation and must not turn into unrestricted filesystem access.
+
+Changing the permission ceiling must affect the running system, not only persisted settings. Runtime reconfiguration and MCP service state must be refreshed so the new ceiling is enforced immediately.
+
+## Authentication
+
+Authentication is installation-level and remains stable while Workspaces change. OAuth uses one persistent installation Client ID, PKCE authorization codes, a rotatable connection secret, and internal signing material that is never exposed through the frontend.
+
+Bearer-token authentication is available when OAuth is unnecessary. No-auth mode is intended only for trusted local use. Public endpoints should use authentication.
+
+New Client IDs use the `mnelyra-client-` prefix. Do not introduce a second authentication model for a specific Workspace or routing provider.
+
+## Connections
+
+The local MCP service binds to loopback. Remote access is provided through OpenAI secure connection, Cloudflare, or FRP. These are transport choices around the same MCP service; they are not separate tool runtimes.
+
+The OpenAI secure connection uses the Tunnel ID and OpenAI API Key configured on the Connections page. Cloudflare and FRP remain independent public-routing choices. Connection status in the UI must reflect actual route readiness rather than merely the existence of a local listener.
+
+Do not duplicate routing configuration per Workspace. Routing belongs to the application connection layer.
+
+## Frontend conventions
+
+The UI should expose state and controls, not narrate the implementation. If the meaning is obvious from the control, prefer the control over an explanatory paragraph. Empty sections should disappear instead of rendering `0`, `0/0`, dashes, or large empty cards.
+
+Product terminology is **Mnelyra**, **ChatGPT**, **Workspace**, **MCP**, **Connections**, and **Workspace memory**. Internal runtime names should stay internal unless a maintainer genuinely needs them to debug an implementation boundary.
+
+README screenshots must be captured from the current production UI with isolated synthetic data. Never capture a normal developer instance because workspace paths, endpoints, Client IDs, Tunnel IDs, and credentials may be visible. Temporary demo backends, browser profiles, and capture builds must be removed after the images are produced.
 
 ## Required checks
 
-Frontend:
+Run the frontend checks from the repository root:
 
 ```bash
 npm run check
 npm run build
 ```
 
-Rust:
+Run the Rust checks from `src-tauri/`:
 
 ```bash
-cd src-tauri
 cargo fmt -- --check
 cargo test
 cargo clippy --all-targets -- -D warnings
 ```
 
-Repository hygiene:
+Finish with repository hygiene checks:
 
 ```bash
 git diff --check
 git status --short
 ```
 
-Do not commit generated trees such as `node_modules`, `.svelte-kit`, `build`, or `src-tauri/target`.
+Generated directories such as `node_modules`, `.svelte-kit`, `build`, and `src-tauri/target` must not be committed.
 
-## Runtime model
+## Release process
 
-Mnelyra has one authoritative Workspace at a time. Workspace switching is not a cosmetic selection: the active local MCP runtime is drained and rebound so new requests resolve against the selected project directory.
+Release versions must match in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`. The current GitHub workflow builds Windows NSIS and macOS universal packages, uploads updater artifacts, and publishes a GitHub Release when a `v*` tag is pushed.
 
-The main runtime layers are:
+Before tagging, run the full checks above and verify the README images, release links, updater endpoint, and public documentation against the current UI. Then commit the release state, push `main`, create the version tag, and push the tag.
 
-```text
-MCP client / ChatGPT App / other upstream
-                |
-       remote connection layer
- OpenAI Secure Tunnel / Cloudflare / FRP
-                |
-           local MCP listener
-                |
-          shared tool dispatcher
-                |
-             Workspace
+The release workflow is the source of truth for whether a release completed. A pushed tag is not a successful release until the Windows and macOS jobs finish and the GitHub Release assets are present.
 
-Native Codex app-server is managed beside this path and is bound to the
-same active Workspace and application permission setting.
-```
+## Secrets and public artifacts
 
-The desktop UI intentionally does not contain a second Codex task/session console. Remote Codex-control tools and the native session coordinator remain runtime capabilities, but the user’s chat/task UI stays in the upstream client/Codex surface.
+Source, tests, screenshots, and documentation must never contain real API keys, bearer tokens, OAuth secrets, Cloudflare or FRP credentials, Tunnel IDs, personal project paths, or captured local profiles.
 
-## Permission ceiling
-
-The application setting `general.permissionCeiling` has three supported values:
-
-- `automatic` — do not add a Mnelyra permission profile;
-- `read_only` — block mutating MCP tools and mutating Codex controls;
-- `custom` — Codex uses `workspace-write`, network is enabled, and Windows uses the elevated sandbox. A scoped MiKTeX writable root/environment is added only when a local MiKTeX installation is detected.
-
-The setting is persisted globally and is applied when the MCP runtime starts. Changing it uses the `set_permission_ceiling` command, which reconfigures the native Codex app-server and restarts the running MCP service so the new policy takes effect immediately.
-
-Read-only is enforced twice: mutating tools are omitted from the advertised tool catalog where possible, and the shared dispatcher rejects them again before execution.
-
-## Authentication
-
-Authentication is application-level. Workspace copies of old auth fields exist only for compatibility and are overridden at runtime by the global configuration.
-
-OAuth uses:
-
-- a stable installation Client ID;
-- a rotatable client/connection secret;
-- PKCE (`S256`) authorization codes;
-- an internal token-signing secret.
-
-There is no authorization-password page or POST authorization step. `/oauth/authorize` validates the request and PKCE parameters and redirects with a short-lived authorization code. Internal token-signing material is not exposed through frontend secret commands.
-
-New installations generate Client IDs with the `mnelyra-client-` prefix. Existing persisted IDs are not forcibly renamed.
-
-## Durable history and harness state
-
-Conversation persistence is Workspace-owned. `history_session_bootstrap`, `history_session_checkpoint`, `history_session_search`, and `history_session_read` maintain a lossless numbered Markdown archive and bounded retrieval flow.
-
-The history layer and the harness are not the runtime authority. The harness stores task/checkpoint/operation evidence; the active Workspace/runtime layer decides where live operations execute.
-
-## Remote connections
-
-Local MCP listeners bind to loopback. A remote client therefore needs a remote route. Mnelyra currently supports:
-
-- OpenAI Secure MCP Tunnel;
-- Cloudflare routing;
-- FRP.
-
-The OpenAI tunnel helper is an implementation dependency of Start, not a separate setup step in the UI.
-
-Connection status shown in the topology should reflect real runtime state. Do not animate the upstream-to-computer flow merely because the local MCP listener is running; a remote route must also be ready.
-
-## Secrets and local state
-
-Never put runtime credentials in source, test fixtures, screenshots, or documentation. The repository should contain only secret **field names**, not real values.
-
-Application data is resolved outside the source tree. Tests and documentation capture must use synthetic credentials and isolated data directories.
-
-Before publishing, scan for at least:
-
-- API keys/bearer tokens/private keys;
-- OAuth client secrets;
-- Cloudflare/FRP credentials;
-- real Tunnel IDs;
-- absolute personal project paths;
-- local runtime profiles or screenshots that were not created specifically for public documentation.
-
-## Public documentation screenshots
-
-README screenshots live under `static/readme/` and must be captured from the current production UI with a synthetic/demo backend. Never capture a normal developer instance: Authentication, Connections, Workspace, and Memory can expose local identifiers, project paths, endpoints, and credentials.
-
-The public images use fictional workspaces, paths, domains, Client IDs, tokens, and provider state. Temporary demo shims and browser profiles used to create those captures must be removed after the screenshots are produced.
-
-## Naming
-
-The product name is **Mnelyra**. Internal historical Rust crate/library identifiers may still contain `rootrelay`; changing an internal identifier is not required unless it leaks into user-visible UI, documentation, generated Client IDs, package metadata, or release artifacts.
+Documentation examples should use obvious synthetic values such as `example.com`, demo project names, and non-secret placeholders. Public screenshots belong under `static/readme/`; temporary capture files do not.

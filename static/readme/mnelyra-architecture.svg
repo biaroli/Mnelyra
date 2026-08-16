@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
   <title id="title">Mnelyra architecture</title>
-  <desc id="desc">Upstream AI clients connect through Mnelyra to one active local workspace. Codex and the ChatGPT Web bridge are optional paths.</desc>
+  <desc id="desc">ChatGPT, Claude, and other MCP clients connect through Mnelyra to one active local workspace. A ChatGPT Web bridge can provide an optional additional model path.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#071019"/>
@@ -36,37 +36,30 @@
 
   <g filter="url(#shadow)">
     <g>
-      <rect x="110" y="112" width="300" height="116" rx="18" fill="#091522" stroke="#20384d" stroke-width="2"/>
-      <circle cx="160" cy="170" r="22" fill="#10263a" stroke="#3ba0ff" stroke-width="2"/>
-      <path d="M149 170h22M160 159v22" stroke="#6ebcff" stroke-width="3" stroke-linecap="round"/>
-      <text x="202" y="165" class="label">ChatGPT</text>
-      <text x="202" y="193" class="small">MCP upstream</text>
+      <rect x="165" y="112" width="300" height="116" rx="18" fill="#091522" stroke="#20384d" stroke-width="2"/>
+      <circle cx="215" cy="170" r="22" fill="#10263a" stroke="#3ba0ff" stroke-width="2"/>
+      <path d="M204 170h22M215 159v22" stroke="#6ebcff" stroke-width="3" stroke-linecap="round"/>
+      <text x="257" y="165" class="label">ChatGPT</text>
+      <text x="257" y="193" class="small">OpenAI / MCP upstream</text>
     </g>
     <g>
-      <rect x="440" y="112" width="300" height="116" rx="18" fill="#091522" stroke="#20384d" stroke-width="2"/>
-      <circle cx="490" cy="170" r="22" fill="#10263a" stroke="#3ba0ff" stroke-width="2"/>
-      <path d="M480 160l20 20M500 160l-20 20" stroke="#6ebcff" stroke-width="3" stroke-linecap="round"/>
-      <text x="532" y="165" class="label">Claude</text>
-      <text x="532" y="193" class="small">MCP upstream</text>
+      <rect x="535" y="112" width="300" height="116" rx="18" fill="#091522" stroke="#20384d" stroke-width="2"/>
+      <circle cx="585" cy="170" r="22" fill="#10263a" stroke="#3ba0ff" stroke-width="2"/>
+      <path d="M575 160l20 20M595 160l-20 20" stroke="#6ebcff" stroke-width="3" stroke-linecap="round"/>
+      <text x="627" y="165" class="label">Claude</text>
+      <text x="627" y="193" class="small">MCP upstream</text>
     </g>
     <g>
-      <rect x="770" y="112" width="300" height="116" rx="18" fill="#091522" stroke="#20384d" stroke-width="2"/>
-      <circle cx="820" cy="170" r="22" fill="#10263a" stroke="#3ba0ff" stroke-width="2"/>
-      <circle cx="813" cy="166" r="5" fill="#6ebcff"/><circle cx="827" cy="166" r="5" fill="#6ebcff"/>
-      <path d="M807 181c3-7 9-10 13-10s10 3 13 10" fill="none" stroke="#6ebcff" stroke-width="3" stroke-linecap="round"/>
-      <text x="862" y="165" class="label">Other MCP clients</text>
-      <text x="862" y="193" class="small">Any compatible upstream</text>
-    </g>
-    <g>
-      <rect x="1100" y="112" width="300" height="116" rx="18" fill="#0d1522" stroke="#493f73" stroke-width="2"/>
-      <circle cx="1150" cy="170" r="22" fill="#1a1730" stroke="#9c7cff" stroke-width="2"/>
-      <path d="M1141 164l-7 6 7 6M1159 164l7 6-7 6M1155 157l-10 26" fill="none" stroke="#b8a7ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-      <text x="1192" y="165" class="label">Codex</text>
-      <text x="1192" y="193" class="small">Optional harness</text>
+      <rect x="905" y="112" width="330" height="116" rx="18" fill="#091522" stroke="#20384d" stroke-width="2"/>
+      <circle cx="955" cy="170" r="22" fill="#10263a" stroke="#3ba0ff" stroke-width="2"/>
+      <circle cx="948" cy="166" r="5" fill="#6ebcff"/><circle cx="962" cy="166" r="5" fill="#6ebcff"/>
+      <path d="M942 181c3-7 9-10 13-10s10 3 13 10" fill="none" stroke="#6ebcff" stroke-width="3" stroke-linecap="round"/>
+      <text x="997" y="165" class="label">Other MCP clients</text>
+      <text x="997" y="193" class="small">Any compatible upstream</text>
     </g>
   </g>
 
-  <path d="M755 255V310" stroke="#3ba0ff" stroke-width="4" marker-end="url(#arrowBlue)"/>
+  <path d="M715 255V310" stroke="#3ba0ff" stroke-width="4" marker-end="url(#arrowBlue)"/>
 
   <g filter="url(#shadow)">
     <rect x="265" y="322" width="900" height="300" rx="28" fill="url(#mn)" stroke="#2d89d7" stroke-width="3"/>
@@ -112,7 +105,7 @@
   </g>
 
   <g>
-    <path d="M1250 228V330H1285" fill="none" stroke="#9c7cff" stroke-width="3" stroke-dasharray="9 8" marker-end="url(#arrowViolet)"/>
+    <path d="M1165 382 C1184 382 1195 396 1213 396" fill="none" stroke="#9c7cff" stroke-width="3" stroke-dasharray="9 8" stroke-linecap="round" marker-end="url(#arrowViolet)"/>
     <rect x="1215" y="342" width="305" height="108" rx="18" fill="#151226" stroke="#6957b7" stroke-width="2"/>
     <text x="1367" y="382" text-anchor="middle" class="small" fill="#b8a7ff">OPTIONAL MODEL PATH</text>
     <text x="1367" y="416" text-anchor="middle" class="label">ChatGPT Web bridge</text>
