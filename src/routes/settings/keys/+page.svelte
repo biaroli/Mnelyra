@@ -24,7 +24,7 @@
       label: "OAuth Client ID",
       stableId: true,
     },
-    { key: "oauth_client_secret", label: "OAuth Client Secret" },
+    { key: "oauth_approval_code", label: "Authorization code" },
     { key: "bearer_token", label: "Bearer Token" },
   ];
 
@@ -39,7 +39,8 @@
 
   function rowLabel(row: SecretRow): string {
     if (!zh) return row.label;
-    if (row.key === "oauth_client_secret" || row.key === "bearer_token") return "连接密钥";
+    if (row.key === "oauth_approval_code") return "授权码";
+    if (row.key === "bearer_token") return "连接密钥";
     return row.label;
   }
 
@@ -124,7 +125,7 @@
 
         <div class="mt-5 grid gap-4">
           {#each MCP_ROWS as row (row.key)}
-            {#if auth.mcpAuthType === "oauth" && (row.key === "oauth_client_id" || row.key === "oauth_client_secret") || auth.mcpAuthType === "bearer" && row.key === "bearer_token"}
+            {#if auth.mcpAuthType === "oauth" && (row.key === "oauth_client_id" || row.key === "oauth_approval_code") || auth.mcpAuthType === "bearer" && row.key === "bearer_token"}
               <div class="grid gap-1">
                 <span class="text-xs text-[var(--color-text-muted)]">{rowLabel(row)}</span>
                 {#if row.stableId}

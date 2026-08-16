@@ -12,9 +12,10 @@ use tower_http::cors::CorsLayer;
 
 use crate::activity::ActivityCoordinator;
 use crate::auth::{
-    authorization_server_metadata, authorize_get, external_base_url, protected_resource_metadata,
-    token_exchange, verify_bearer_header, verify_oauth_bearer_header, AuthorizeParams,
-    OAuthRuntime, TokenForm,
+    authorization_server_metadata, authorize_get, authorize_post, external_base_url,
+    protected_resource_metadata, register_client, token_exchange, verify_bearer_header,
+    verify_oauth_bearer_header, AuthorizeForm, AuthorizeParams, OAuthRuntime, RegistrationRequest,
+    TokenForm,
 };
 use crate::mcp::server::{handle_request, new_state, SharedState};
 use crate::mcp::{TUNNEL_MCP_SECRET_KEY, TUNNEL_SECRET_SCOPE, TUNNEL_TOKEN_HEADER};
@@ -39,7 +40,15 @@ struct ListenerState {
     configured_public_url: String,
     bearer_token: Option<String>,
     oauth: Option<Arc<OAuthRuntime>>,
-    oauth_client_secret: Option<String>,
+}
+
+fn workspace_label(path: &str) -> Option<String> {
+    std::path::Path::new(path)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 fn is_codex_control_tool(name: &str) -> bool {
@@ -239,7 +248,7 @@ pub fn spawn_listener(
     workspace_id: String,
     auth: AuthConfig,
     public_base_url: String,
-    oauth_client_secret: Option<String>,
+    oauth_approval_code: Option<String>,
     oauth_token_secret: Option<String>,
     runtime: RuntimeConfig,
     permission_ceiling: String,
@@ -266,12 +275,13 @@ pub fn spawn_listener(
     };
     let configured_public_url = public_base_url.trim().to_string();
     let oauth = if auth.oauth_enabled() {
+        let approval_code = oauth_approval_code.unwrap_or_default();
         let token_secret = oauth_token_secret.unwrap_or_default();
         let oauth_base = external_base_url(&HeaderMap::new(), port, &configured_public_url);
         Some(Arc::new(OAuthRuntime::new(
             oauth_base,
             auth.oauth_client_id.clone(),
-            oauth_client_secret.clone(),
+            approval_code,
             token_secret,
         )))
     } else {
@@ -287,7 +297,6 @@ pub fn spawn_listener(
         configured_public_url,
         bearer_token,
         oauth,
-        oauth_client_secret,
     };
     // 在返回 Running 之前完成 bind，避免后台任务里的端口冲突被伪装成启动成功。
     let listener = bind_listener(port)?;
@@ -326,7 +335,11 @@ async fn serve(
             "/.well-known/oauth-protected-resource",
             get(oauth_protected_resource_metadata),
         )
-        .route("/oauth/authorize", get(oauth_authorize_get))
+        .route(
+            "/oauth/authorize",
+            get(oauth_authorize_get).post(oauth_authorize_post),
+        )
+        .route("/oauth/register", post(oauth_register_post))
         .route("/oauth/token", post(oauth_token_post))
         .with_state(state)
         .layer(CorsLayer::permissive());
@@ -556,11 +569,7 @@ async fn oauth_authorization_server_metadata(
         return oauth_not_configured();
     }
     let base = resolve_oauth_base(&state, &headers);
-    Json(authorization_server_metadata(
-        &base,
-        state.oauth_client_secret.as_deref(),
-    ))
-    .into_response()
+    Json(authorization_server_metadata(&base)).into_response()
 }
 
 async fn oauth_protected_resource_metadata(
@@ -587,7 +596,40 @@ async fn oauth_authorize_get(
     let Some(oauth) = state.oauth.as_ref() else {
         return oauth_not_configured();
     };
-    authorize_get(oauth, params, &resolve_oauth_base(&state, &headers))
+    let workspace = workspace_label(&state.workspace_path);
+    authorize_get(
+        oauth,
+        params,
+        &resolve_oauth_base(&state, &headers),
+        workspace.as_deref(),
+    )
+}
+
+async fn oauth_authorize_post(
+    State(state): State<ListenerState>,
+    headers: HeaderMap,
+    Form(form): Form<AuthorizeForm>,
+) -> Response {
+    let Some(oauth) = state.oauth.as_ref() else {
+        return oauth_not_configured();
+    };
+    let workspace = workspace_label(&state.workspace_path);
+    authorize_post(
+        oauth,
+        form,
+        &resolve_oauth_base(&state, &headers),
+        workspace.as_deref(),
+    )
+}
+
+async fn oauth_register_post(
+    State(state): State<ListenerState>,
+    Json(request): Json<RegistrationRequest>,
+) -> Response {
+    let Some(oauth) = state.oauth.as_ref() else {
+        return oauth_not_configured();
+    };
+    register_client(oauth, request)
 }
 
 async fn oauth_token_post(

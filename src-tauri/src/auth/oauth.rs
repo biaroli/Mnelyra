@@ -127,26 +127,17 @@ fn is_loopback_host(host: &str) -> bool {
     matches!(host, "127.0.0.1" | "localhost" | "::1")
 }
 
-fn token_endpoint_auth_methods(client_secret: Option<&str>) -> Vec<&'static str> {
-    match client_secret {
-        Some(secret) if !secret.is_empty() => {
-            vec!["client_secret_post", "client_secret_basic"]
-        }
-        _ => vec!["none"],
-    }
-}
-
-pub fn authorization_server_metadata(base_url: &str, client_secret: Option<&str>) -> Value {
+pub fn authorization_server_metadata(base_url: &str) -> Value {
     let base = base_url.trim_end_matches('/');
-    let methods = token_endpoint_auth_methods(client_secret);
     json!({
         "issuer": base,
         "authorization_endpoint": format!("{base}/oauth/authorize"),
         "token_endpoint": format!("{base}/oauth/token"),
+        "registration_endpoint": format!("{base}/oauth/register"),
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
-        "token_endpoint_auth_methods_supported": methods,
+        "token_endpoint_auth_methods_supported": ["none"],
         "scopes_supported": ["mcp", "offline_access"],
     })
 }
@@ -175,16 +166,11 @@ mod tests {
     }
 
     #[test]
-    fn authorization_metadata_includes_token_auth_methods() {
-        let meta = authorization_server_metadata("https://example.com", None);
+    fn authorization_metadata_uses_pkce_public_client() {
+        let meta = authorization_server_metadata("https://example.com");
         assert_eq!(
             meta["token_endpoint_auth_methods_supported"],
             json!(["none"])
-        );
-        let meta = authorization_server_metadata("https://example.com", Some("secret"));
-        assert_eq!(
-            meta["token_endpoint_auth_methods_supported"],
-            json!(["client_secret_post", "client_secret_basic"])
         );
     }
 

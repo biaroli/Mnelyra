@@ -5,16 +5,16 @@ use crate::error::{AppError, AppResult};
 
 const SHARED_KEYS: &[&str] = &[
     "oauth_client_id",
+    "oauth_approval_code",
     "bearer_token",
-    "oauth_client_secret",
     "cloudflare_token",
     "frp_token",
 ];
 
 const MCP_SHARED_KEYS: &[&str] = &[
     "oauth_client_id",
+    "oauth_approval_code",
     "bearer_token",
-    "oauth_client_secret",
     "cloudflare_token",
     "frp_token",
 ];

@@ -49,7 +49,7 @@ Mnelyra 把一个真实的本地项目目录变成所有上游 AI 都能共同�
 
 ### 固定连接身份
 
-支持 OAuth 和 Bearer Token。安装级 OAuth Client ID 保持稳定，连接密钥可以轮换；切换项目不需要换一套客户端身份。
+支持 OAuth 和 Bearer Token。OAuth 使用 PKCE；兼容客户端可以自动注册，真正授权前会要求输入 Mnelyra 桌面端显示的授权码。切换项目不需要重新连接客户端。
 
 ![Mnelyra 认证页](static/readme/mnelyra-authentication.png)
 
@@ -99,7 +99,7 @@ http://127.0.0.1:28766/mcp
 
 ### 4. 配置认证并连接上游
 
-打开 **设置 → 认证**。公网 MCP 推荐 OAuth；也可以使用 Bearer Token。
+打开 **设置 → 认证**。公网 MCP 推荐 OAuth；也可以使用 Bearer Token。使用 OAuth 时，在浏览器授权页输入 Mnelyra 显示的授权码即可。
 
 把 Mnelyra 显示的 `/mcp` 地址填入 ChatGPT、Claude 或其他支持自定义 MCP 的客户端即可。第一次连接可以检查：
 

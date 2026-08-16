@@ -49,7 +49,7 @@ Application-level settings stay in one place: local MCP service, permission ceil
 
 ### Stable connection identity
 
-OAuth and bearer token authentication are supported. The installation-level OAuth Client ID stays stable while connection credentials can be rotated; switching projects does not require a new client identity.
+OAuth and bearer token authentication are supported. OAuth uses PKCE; compatible clients can register automatically, and Mnelyra asks for the authorization code shown in the desktop app before granting access. Switching projects does not require reconnecting the client.
 
 ![Mnelyra Authentication](static/readme/mnelyra-authentication.png)
 
@@ -99,7 +99,7 @@ http://127.0.0.1:28766/mcp
 
 ### 4. Configure authentication and connect a client
 
-Open **Settings → Authentication**. OAuth is recommended for a public MCP endpoint; bearer token is also available.
+Open **Settings → Authentication**. OAuth is recommended for a public MCP endpoint; bearer token is also available. For OAuth, copy the Mnelyra authorization code when the browser authorization page asks for it.
 
 Enter the `/mcp` URL shown by Mnelyra into ChatGPT, Claude, or another client that supports custom MCP servers. A first connection check can call:
 

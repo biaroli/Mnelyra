@@ -262,8 +262,8 @@ impl RuntimeSupervisor {
                 if let Some(client_id) = SecretStore::get_shared("oauth_client_id")? {
                     auth.oauth_client_id = client_id;
                 }
-                let oauth_client_secret = if profile.auth.oauth_enabled() {
-                    SecretStore::get_shared("oauth_client_secret")?
+                let oauth_approval_code = if profile.auth.oauth_enabled() {
+                    SecretStore::get_shared("oauth_approval_code")?
                 } else {
                     None
                 };
@@ -278,7 +278,7 @@ impl RuntimeSupervisor {
                     profile.id.clone(),
                     auth,
                     profile.effective_public_url(),
-                    oauth_client_secret,
+                    oauth_approval_code,
                     oauth_token_secret,
                     profile.runtime.clone(),
                     permission_ceiling.to_string(),

@@ -11,8 +11,8 @@ static DATA_FILE_LOCK: Mutex<()> = Mutex::new(());
 
 const SHARED_KEYS: &[&str] = &[
     "oauth_client_id",
+    "oauth_approval_code",
     "bearer_token",
-    "oauth_client_secret",
     "oauth_token_secret",
 ];
 
@@ -107,8 +107,17 @@ impl DataStore {
         };
         let removed_obsolete_auth = {
             let mut changed = false;
+            if !data.shared_secrets.contains_key("oauth_approval_code") {
+                if let Some(value) = data.shared_secrets.remove("oauth_password") {
+                    if !value.trim().is_empty() {
+                        data.shared_secrets
+                            .insert("oauth_approval_code".to_string(), value);
+                        changed = true;
+                    }
+                }
+            }
             for key in [
-                "oauth_password",
+                "oauth_client_secret",
                 "actions_oauth_password",
                 "actions_oauth_client_id",
                 "actions_api_key",
@@ -315,6 +324,14 @@ fn random_secret() -> String {
 fn shared_value_for_key(key: &str) -> String {
     if key == "oauth_client_id" {
         format!("mnelyra-client-{}", &uuid::Uuid::new_v4().to_string()[..12])
+    } else if key == "oauth_approval_code" {
+        uuid::Uuid::new_v4()
+            .to_string()
+            .replace('-', "")
+            .chars()
+            .take(16)
+            .collect::<String>()
+            .to_ascii_uppercase()
     } else {
         random_secret()
     }
@@ -329,5 +346,12 @@ mod tests {
         let value = shared_value_for_key("oauth_client_id");
         assert!(value.starts_with("mnelyra-client-"));
         assert_eq!(value.len(), "mnelyra-client-".len() + 12);
+    }
+
+    #[test]
+    fn shared_oauth_approval_code_is_copyable_but_nontrivial() {
+        let value = shared_value_for_key("oauth_approval_code");
+        assert_eq!(value.len(), 16);
+        assert!(value.chars().all(|ch| ch.is_ascii_hexdigit()));
     }
 }

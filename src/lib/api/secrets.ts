@@ -2,8 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type SharedSecretKey =
   | "oauth_client_id"
+  | "oauth_approval_code"
   | "bearer_token"
-  | "oauth_client_secret"
   | "cloudflare_token"
   | "frp_token";
 
