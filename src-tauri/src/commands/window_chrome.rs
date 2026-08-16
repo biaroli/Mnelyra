@@ -1,7 +1,8 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 
+use crate::app_state::AppState;
 use crate::error::{AppError, AppResult};
 
 /// When true, CloseRequested may destroy the window / exit the process.
@@ -44,8 +45,10 @@ pub fn show_main_window(app: AppHandle) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn quit_app(app: AppHandle) -> AppResult<()> {
+pub async fn quit_app(app: AppHandle, state: State<'_, AppState>) -> AppResult<()> {
     arm_allow_exit();
+    state.openai_tunnel.shutdown().await;
+    state.codex_app_server.shutdown().await;
     app.exit(0);
     Ok(())
 }

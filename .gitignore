@@ -21,9 +21,15 @@ src-tauri/icons/icons/
 src-tauri/icons/logo-design.png
 
 .rootrelay/
-.web-codex/
 tmp-run
 
-# 本地聊天记录 / 开发历史由 .rootrelay / .web-codex 忽略；docs/ 用于项目维护文档。
+# Isolated UI acceptance/runtime scratch
+.mnelyra-dev.conf.json
+mnelyra-*.png
+!static/readme/mnelyra-*.png
+ui-acceptance/
+src-tauri/tauri.isolated-dev.conf.json
+
+# 本地聊天记录 / 开发历史由 .rootrelay 忽略；docs/ 用于项目维护文档。
 docs/.mcp-probe/
 docs/history-session/

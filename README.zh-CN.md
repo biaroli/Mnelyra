@@ -1,11 +1,13 @@
 <p align="center">
-  <img src="static/favicon.png" width="108" alt="RootRelay 图标">
+  <img src="static/favicon.png" width="108" alt="Mnelyra 图标">
 </p>
 
-<h1 align="center">RootRelay</h1>
+<h1 align="center">Mnelyra</h1>
+
+<h3 align="center">让 ChatGPT、Claude、Codex 和任意 MCP 客户端，共用同一个本地工作区与同一份项目记忆。</h3>
 
 <p align="center">
-  用一个稳定的 MCP 地址，把本地工作区接给兼容 MCP 的客户端。
+  <strong>不接 Codex 也能直接读写文件、运行命令和测试；需要时再接入 Codex。额度紧张时，还可以把 ChatGPT Web 订阅作为另一条模型通道接进开发工作流。</strong>
 </p>
 
 <p align="center">
@@ -13,114 +15,93 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/biaroli/RootRelay/releases/latest"><img src="https://img.shields.io/github/v/release/biaroli/RootRelay?label=release" alt="release"></a>
+  <a href="https://github.com/biaroli/Mnelyra/releases/latest"><img src="https://img.shields.io/github/v/release/biaroli/Mnelyra?label=release" alt="release"></a>
   <img src="https://img.shields.io/badge/Windows-x64-0078D4?logo=windows" alt="Windows x64">
   <img src="https://img.shields.io/badge/macOS-universal-000000?logo=apple" alt="macOS universal">
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0">
 </p>
 
-RootRelay 在你的电脑上运行 MCP 服务，并把它指向当前选择的工作区。连接后的客户端可以读取和修改文件、搜索项目、执行允许的命令和测试、检查 Git、查看图片，并保存跟随项目走的开发历史。
+Mnelyra 把一个真实的本地项目目录变成所有上游 AI 都能共同使用的工作区。ChatGPT、Claude 或其他 MCP 客户端可以直接从网页读取和修改文件、搜索项目、应用 Patch、执行命令和测试、检查 Git、查看图片；Codex 是可选增强，不是前置条件。
 
-客户端连接和工作区是分开的。多个项目导入一次后，点击左侧项目就会切换 MCP 根目录并立即激活，不需要换公网地址，也不需要重新配置一套服务。
+工作区同时也是记忆边界。你可以从一个上游切到另一个上游，开发历史、当前焦点、最近变化和未完成事项仍然跟着项目走，而不是锁死在某个聊天窗口或某一家模型里。
 
-![RootRelay 工作区预览](static/readme/rootrelay-workspace.svg)
+![Mnelyra 当前界面](static/readme/mnelyra-connections.png)
 
-预览图中的项目名、路径、域名和凭据全部是虚构内容。
+> 所有 README 截图都由当前 Mnelyra production UI 在隔离演示环境中生成。项目名、路径、域名、Client ID、Token 和密钥均为虚构数据，不包含开发者本机内容。
 
-## 关于
+## 为什么用 Mnelyra
 
-RootRelay 是一个面向本地开发项目的桌面 MCP 工作区中继。它保持同一套 MCP 服务身份和客户端连接地址，同时允许你直接从桌面界面切换连接背后的项目根目录。
+| ChatGPT Web 作为额外模型通道 | 一个工作区，共享一份记忆 | Codex 可接可不接 |
+| --- | --- | --- |
+| 可选接入 ChatGPT Web bridge，把你自己的 ChatGPT Web 订阅作为另一条模型通道，降低对单一 Codex / API 配额的依赖。 | ChatGPT、Claude、Codex 和其他 MCP 上游围绕同一个 Workspace 工作，历史与恢复状态跟着项目走。 | 任何兼容 MCP 的上游都可以直接操作工作区；需要 Codex harness 时再接入，不需要为了使用 Mnelyra 先启动 Codex。 |
 
-它解决的是一个很直接的问题：工作区只需要导入一次，MCP 客户端只需要连接一次，之后切项目不用反复重配 endpoint。RootRelay 负责这条连接背后的工作区边界、MCP 工具、认证、隧道生命周期和跟随项目保存的会话历史。
+## 功能一览
 
-## RootRelay 能做什么
+### 一个入口接所有上游
 
-| 部分 | 行为 |
-| --- | --- |
-| 工作区 | 导入本地项目目录，从侧栏直接切换当前项目根目录 |
-| MCP | 提供 Streamable HTTP MCP，以及文件、搜索、Patch、命令、Git、图片和历史工具 |
-| 客户端 | 只要客户端支持对应的 MCP 传输方式和认证方式，就可以连接 RootRelay |
-| 公网接入 | 支持 Cloudflare Named Tunnel、Cloudflare Quick Tunnel、FRP，也可以只在本机运行 |
-| 认证 | 支持 OAuth、Bearer Token 和本机无认证模式 |
-| 固定身份 | 安装级 OAuth Client ID 在重启、切工作区和正常维护期间保持不变 |
-| 历史会话 | 开发历史保存在项目自己的 `.rootrelay/history-session/` |
-| Actions | 需要时可以单独开放 OpenAPI Actions 网关 |
+上游只需要连 Mnelyra。OpenAI 安全连接、Cloudflare 和 FRP 都集中在连接页；工作区切换发生在 Mnelyra 后面，所以不需要每换一个项目就重新配置 ChatGPT、Claude 或其他 MCP 客户端。
 
-## MCP 客户端
+### 一个地方管整个 Workspace
 
-RootRelay 不绑定某一家 AI。ChatGPT 和 Claude 都是常见的远程 MCP 客户端；其他支持 Streamable HTTP MCP 和当前认证方式的客户端，也可以使用同一个 RootRelay endpoint。
+本机 MCP、权限总阀门、开发者控制和 ChatGPT 总结策略都集中在通用设置里，并应用到所有工作区，不需要每个项目重复配置。
 
-不同客户端开放的 MCP 能力和权限不完全相同。RootRelay 负责服务端和工具，最终能调用哪些能力由客户端本身决定。
+![Mnelyra 通用设置](static/readme/mnelyra-general.png)
 
-## 安装
+### 固定连接身份
 
-从 [GitHub Releases](https://github.com/biaroli/RootRelay/releases/latest) 下载当前版本。
+支持 OAuth、Bearer Token 和本机无认证。安装级 OAuth Client ID 保持稳定，连接密钥可以轮换；切换项目不需要换一套客户端身份。
+
+![Mnelyra 认证页](static/readme/mnelyra-authentication.png)
+
+### 不依赖 Codex，也能直接改项目
+
+MCP 本身就提供文件读取与修改、搜索、Patch、命令执行、测试、Git、图片和历史工具。当前 Workspace 就是这些工具的项目根目录。Codex 是可选 harness，不是 Mnelyra 的启动条件。
+
+## 工作方式
+
+![Mnelyra 架构](static/readme/mnelyra-architecture.svg)
+
+客户端连接和项目根目录彼此分开。多个项目只需要导入一次，之后从侧栏切换 Workspace；客户端仍然使用原来的 Mnelyra 连接。
+
+## 快速开始
+
+### 1. 安装
+
+从 [GitHub Releases](https://github.com/biaroli/Mnelyra/releases/latest) 下载当前版本。
 
 | 系统 | 安装包 |
 | --- | --- |
-| Windows 10/11 x64 | `RootRelay_*_x64-setup.exe` |
-| macOS Intel + Apple Silicon | `RootRelay_*_universal.dmg` |
+| Windows 10/11 x64 | `Mnelyra_*_x64-setup.exe` |
+| macOS Intel + Apple Silicon | `Mnelyra_*_universal.dmg` |
 
-macOS 当前没有 Apple Developer notarization。第一次打开时，系统可能要求在 系统设置 → 隐私与安全性 中确认。
+macOS 当前没有 Apple Developer notarization，首次打开时可能需要在“系统设置 → 隐私与安全性”中确认。
 
-## 第一次配置
+### 2. 添加工作区
 
-### 1. 配置 MCP 服务
+点击侧栏的文件夹按钮，选择项目根目录。选择工作区后，Mnelyra 会把 MCP 根目录切到该项目并激活它，不需要第二个启动按钮。
 
-打开 通用，设置本地端口、权限模式、允许执行的命令和需要使用的隧道方式，然后保存。这套配置对所有工作区生效，新项目不需要重新填写一遍。
+### 3. 选择连接方式
 
-只给本机 MCP 客户端使用时，可以关闭公网隧道，地址类似：
+打开 **连接**：
+
+| 场景 | 连接方式 |
+| --- | --- |
+| OpenAI / ChatGPT 安全 MCP 链路 | OpenAI 安全连接 |
+| 固定公网域名 | Cloudflare Named Tunnel |
+| 临时测试地址 | Cloudflare Quick Tunnel |
+| 自托管反向代理 | FRP |
+
+本机 MCP 默认地址类似：
 
 ```text
 http://127.0.0.1:28766/mcp
 ```
 
-### 2. 配置认证
+### 4. 配置认证并连接上游
 
-打开 认证。公网 MCP 推荐使用 OAuth。
+打开 **设置 → 认证**。公网 MCP 推荐 OAuth；也可以使用 Bearer Token。本机可信环境可以选择不启用认证。
 
-RootRelay 首次初始化时生成一个安装级 OAuth Client ID，并在整个安装生命周期中保持固定。界面只读显示 Client ID；授权口令和其他 Secret 仍然可以单独轮换。
-
-### 3. 导入工作区
-
-点击 添加工作区，选择项目根目录。
-
-导入后，点击任意工作区会完整执行：
-
-```text
-保存当前选择
-→ 停止旧工作区 MCP
-→ 切换项目根目录
-→ 使用同一套全局配置激活新工作区
-```
-
-选完项目以后不需要再点一次启动。
-
-## 公网接入
-
-### Cloudflare Named Tunnel
-
-长期连接建议使用 Named Tunnel。配置 Tunnel Token 和一个固定 HTTPS 域名，例如 `https://mcp.example.com`，客户端使用：
-
-```text
-https://mcp.example.com/mcp
-```
-
-切换项目时，固定域名和 OAuth Client ID 都不会改变。RootRelay 会等待新的 Tunnel 真正可用，再处理旧连接。
-
-### Cloudflare Quick Tunnel
-
-Quick Tunnel 适合临时测试。它使用 `trycloudflare.com` 临时地址，重启以后地址可能变化，不适合长期保存为客户端 endpoint。
-
-### FRP
-
-已有 FRPS 服务端时，在 FRP 配置 保存服务器地址、端口和 Token。然后回到 通用，把 MCP 隧道切到 FRP，并填写需要使用的子域名。
-
-## 连接客户端
-
-把 RootRelay 工作区页面显示的 `/mcp` 地址填进支持自定义 MCP 的客户端，并选择和 RootRelay 一致的认证方式。
-
-第一次连接可以检查：
+把 Mnelyra 显示的 `/mcp` 地址填入 ChatGPT、Claude 或其他支持自定义 MCP 的客户端即可。第一次连接可以检查：
 
 ```text
 server_info
@@ -128,48 +109,99 @@ get_default_cwd
 git_status
 ```
 
-`server_info` 用来确认 RootRelay 服务，`get_default_cwd` 用来确认当前项目根目录，`git_status` 用来确认 Git 已经指向预期仓库。
+`get_default_cwd` 应该指向当前选择的 Workspace，`git_status` 应该读取同一个项目。
 
-## 工作区切换
+## ChatGPT Web 通道
 
-端口、认证、隧道和执行策略属于应用级配置。工作区只决定当前 MCP 指向哪个项目根目录。
+Mnelyra 可以把 Codex 作为可选 provider 接入，而不是把 Codex 设为整个系统的前置条件。配合 ChatGPT Web bridge，可以把 ChatGPT 网页订阅作为额外模型通道，用在现有 Workspace、MCP 工具和项目记忆之上。
 
-因此切换项目时，客户端可以继续使用原来的公网地址和 OAuth 身份，RootRelay 只替换 endpoint 后面的工作区。
+这条路径适合在单一 Codex / API 配额紧张时切换模型通道，但它仍然使用你自己的 ChatGPT 账号与订阅能力，也受 ChatGPT 当前账号权限、产品能力和网页界面变化影响。
 
-应用重启后会恢复上次选择的工作区，并重新启动已经配置好的 MCP 服务。
+## 工作区记忆
 
-## 历史会话
+Mnelyra 的记忆跟 Workspace 走。不同上游可以围绕同一个项目继续工作，不需要把“记忆”绑定到某一个 ChatGPT 会话、Claude 会话或 Codex task。
 
-RootRelay 可以把开发上下文保存在项目内部：
-
-```text
-.rootrelay/history-session/
-```
+公开的 history 工具包括：
 
 | 工具 | 用途 |
 | --- | --- |
-| `history_session_bootstrap` | 新对话初始化或恢复当前历史会话 |
+| `history_session_bootstrap` | 新对话初始化或恢复项目历史 |
 | `history_session_checkpoint` | 保存本轮决策、改动、验证和下一步 |
 | `history_session_search` | 搜索旧会话 |
 | `history_session_read` | 读取指定历史档案 |
-| `history_session_validate` | 检查历史编号和派生索引 |
+| `history_session_validate` | 检查历史编号和索引 |
 
-RootRelay 不会在后台读取远程聊天窗口。只有 MCP 客户端实际调用历史工具时，内容才会写入项目。
+如果 provider 本身提供可恢复 checkpoint，Mnelyra 也可以把它显示在工作区记忆中；没有 checkpoint 时不会制造空占位。
+
+## 权限
+
+开发者模式提供应用级权限总阀门：
+
+| 模式 | 行为 |
+| --- | --- |
+| **自动** | 不额外收紧，沿用当前下游策略 |
+| **只读** | 顶层阻止写入、Patch 和命令执行等可变更操作 |
+| **工作区读写** | 允许 Workspace 内读写和网络访问；文件操作仍以当前 Workspace 为边界 |
+
+Windows 下的 Codex 可选集成还保留 workspace sandbox 与 MiKTeX 兼容配置；这不等于任意宿主机文件系统访问。
+
+## 公网路由
+
+### Cloudflare
+
+Named Tunnel 适合长期固定地址；Quick Tunnel 适合临时测试。固定地址示例：
+
+```text
+https://mcp.example.com/mcp
+```
+
+### FRP
+
+已有 FRPS 服务端时，在连接页填写服务器、端口、子域名和 Token。Mnelyra 只维护当前应用级 FRP 路由，不需要为每个工作区重复建配置。
+
+### OpenAI 安全连接
+
+连接页可以保存 Tunnel ID 和 OpenAI API Key，并建立 OpenAI 平台使用的安全 MCP 链路。它与普通 Cloudflare / FRP 公网路由是独立入口。
+
+## 从源码运行
+
+需要 Node.js、npm、Rust stable，以及 Tauri 2 对应平台依赖。
+
+```bash
+npm ci
+npm run desktop
+```
+
+提交前检查：
+
+```bash
+npm run check
+npm run build
+
+cd src-tauri
+cargo fmt -- --check
+cargo test
+cargo clippy --all-targets -- -D warnings
+```
+
+维护者说明见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
 ## 安全
 
-RootRelay 可以修改当前工作区文件并执行命令。公网 endpoint 应开启认证，只连接自己控制或明确可信的客户端。
+Mnelyra 可以修改文件并执行命令。公网 endpoint 应启用认证，只连接自己控制或明确可信的客户端。
 
-Windows 当前的命令安全主要由 RootRelay 的工作区边界和命令策略提供，不能当成完整的操作系统级文件沙箱。
+Workspace 边界、权限总阀门和下游 sandbox 是不同层级的限制。Mnelyra 不应被当成完整的操作系统隔离容器。
 
-## 开发
-
-维护者环境和工程说明放在 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
+ChatGPT Web bridge 属于非官方浏览器集成，网页 UI 或账号能力变化可能影响它。请只使用自己的账号，并遵守对应平台的服务条款和 Workspace 策略。
 
 ## License
 
-RootRelay 使用 [Apache License 2.0](LICENSE)。
+Mnelyra 使用 [Apache License 2.0](LICENSE)。
 
-RootRelay 最初基于 [mybolide/coding-tools-mcp](https://github.com/mybolide/coding-tools-mcp) 继续开发；该项目本身 fork 自 Coding Tools MCP 原项目。感谢相关贡献者提供早期 Apache-2.0 代码基础。Copyright 2026 Coding Tools MCP Contributors。
+## 鸣谢
 
-RootRelay 与 OpenAI、Anthropic、Cloudflare 没有隶属或官方合作关系。
+Mnelyra 此前以 RootRelay 与 Codex-Web 名义发布。
+
+感谢 [miuuyy/codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web)、[mybolide/coding-tools-mcp](https://github.com/mybolide/coding-tools-mcp)、[xyTom/coding-tools-mcp](https://github.com/xyTom/coding-tools-mcp)、[Tauri](https://github.com/tauri-apps/tauri)、[Svelte](https://github.com/sveltejs/svelte) 及其贡献者。Copyright 2026 Coding Tools MCP Contributors。
+
+Mnelyra 与 OpenAI、Anthropic、Cloudflare 没有隶属或官方合作关系。

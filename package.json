@@ -1,8 +1,8 @@
 {
-  "name": "rootrelay",
-  "version": "0.1.0",
-  "description": "Desktop MCP workspace relay for MCP-compatible clients",
-  "author": "biaroli",
+  "name": "mnelyra",
+  "version": "0.2.0",
+  "description": "Shared local workspace and MCP relay for ChatGPT, Claude, Codex, and other clients",
+  "author": "Mnelyra Contributors",
   "type": "module",
   "scripts": {
     "dev": "vite dev",

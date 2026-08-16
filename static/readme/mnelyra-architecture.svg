@@ -1,0 +1,125 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Mnelyra architecture</title>
+  <desc id="desc">Upstream AI clients connect through Mnelyra to one active local workspace. Codex and the ChatGPT Web bridge are optional paths.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071019"/>
+      <stop offset="1" stop-color="#0b1520"/>
+    </linearGradient>
+    <linearGradient id="mn" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0d2132"/>
+      <stop offset="1" stop-color="#0a1825"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#000" flood-opacity=".32"/>
+    </filter>
+    <marker id="arrowBlue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 z" fill="#3ba0ff"/>
+    </marker>
+    <marker id="arrowViolet" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 z" fill="#9c7cff"/>
+    </marker>
+    <style>
+      text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .eyebrow { fill:#708aa1; font-size:20px; font-weight:700; letter-spacing:2.5px; }
+      .label { fill:#dce8f3; font-size:25px; font-weight:700; }
+      .small { fill:#8198ad; font-size:19px; font-weight:600; }
+      .module { fill:#cfe3f4; font-size:22px; font-weight:750; }
+      .hero { fill:#f2f7fb; font-size:46px; font-weight:800; letter-spacing:.5px; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" rx="34" fill="url(#bg)"/>
+  <path d="M40 48H1560" stroke="#162838" stroke-width="2"/>
+
+  <text x="800" y="82" text-anchor="middle" class="eyebrow">UPSTREAM AI CLIENTS</text>
+
+  <g filter="url(#shadow)">
+    <g>
+      <rect x="110" y="112" width="300" height="116" rx="18" fill="#091522" stroke="#20384d" stroke-width="2"/>
+      <circle cx="160" cy="170" r="22" fill="#10263a" stroke="#3ba0ff" stroke-width="2"/>
+      <path d="M149 170h22M160 159v22" stroke="#6ebcff" stroke-width="3" stroke-linecap="round"/>
+      <text x="202" y="165" class="label">ChatGPT</text>
+      <text x="202" y="193" class="small">MCP upstream</text>
+    </g>
+    <g>
+      <rect x="440" y="112" width="300" height="116" rx="18" fill="#091522" stroke="#20384d" stroke-width="2"/>
+      <circle cx="490" cy="170" r="22" fill="#10263a" stroke="#3ba0ff" stroke-width="2"/>
+      <path d="M480 160l20 20M500 160l-20 20" stroke="#6ebcff" stroke-width="3" stroke-linecap="round"/>
+      <text x="532" y="165" class="label">Claude</text>
+      <text x="532" y="193" class="small">MCP upstream</text>
+    </g>
+    <g>
+      <rect x="770" y="112" width="300" height="116" rx="18" fill="#091522" stroke="#20384d" stroke-width="2"/>
+      <circle cx="820" cy="170" r="22" fill="#10263a" stroke="#3ba0ff" stroke-width="2"/>
+      <circle cx="813" cy="166" r="5" fill="#6ebcff"/><circle cx="827" cy="166" r="5" fill="#6ebcff"/>
+      <path d="M807 181c3-7 9-10 13-10s10 3 13 10" fill="none" stroke="#6ebcff" stroke-width="3" stroke-linecap="round"/>
+      <text x="862" y="165" class="label">Other MCP clients</text>
+      <text x="862" y="193" class="small">Any compatible upstream</text>
+    </g>
+    <g>
+      <rect x="1100" y="112" width="300" height="116" rx="18" fill="#0d1522" stroke="#493f73" stroke-width="2"/>
+      <circle cx="1150" cy="170" r="22" fill="#1a1730" stroke="#9c7cff" stroke-width="2"/>
+      <path d="M1141 164l-7 6 7 6M1159 164l7 6-7 6M1155 157l-10 26" fill="none" stroke="#b8a7ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="1192" y="165" class="label">Codex</text>
+      <text x="1192" y="193" class="small">Optional harness</text>
+    </g>
+  </g>
+
+  <path d="M755 255V310" stroke="#3ba0ff" stroke-width="4" marker-end="url(#arrowBlue)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="265" y="322" width="900" height="300" rx="28" fill="url(#mn)" stroke="#2d89d7" stroke-width="3"/>
+    <text x="715" y="388" text-anchor="middle" class="hero">Mnelyra</text>
+    <text x="715" y="424" text-anchor="middle" class="small">one relay · one workspace boundary · one shared project context</text>
+
+    <g>
+      <rect x="318" y="466" width="238" height="112" rx="18" fill="#091522" stroke="#24445d" stroke-width="2"/>
+      <path d="M355 516h42M376 495v42" stroke="#55adf5" stroke-width="4" stroke-linecap="round"/>
+      <text x="423" y="514" class="module">MCP relay</text>
+      <text x="423" y="544" class="small">stable client entry</text>
+    </g>
+    <g>
+      <rect x="596" y="466" width="238" height="112" rx="18" fill="#091522" stroke="#24445d" stroke-width="2"/>
+      <ellipse cx="633" cy="502" rx="20" ry="8" fill="none" stroke="#55adf5" stroke-width="3"/>
+      <path d="M613 502v28c0 5 9 8 20 8s20-3 20-8v-28M613 516c0 5 9 8 20 8s20-3 20-8" fill="none" stroke="#55adf5" stroke-width="3"/>
+      <text x="680" y="514" class="module">Shared context</text>
+      <text x="680" y="544" class="small">workspace-owned memory</text>
+    </g>
+    <g>
+      <rect x="874" y="466" width="238" height="112" rx="18" fill="#091522" stroke="#24445d" stroke-width="2"/>
+      <path d="M906 497h30l10 12-10 12h-30l-10-12z" fill="none" stroke="#55adf5" stroke-width="3"/>
+      <path d="M918 521v18M926 521v18" stroke="#55adf5" stroke-width="3"/>
+      <text x="968" y="514" class="module">Workspace tools</text>
+      <text x="968" y="544" class="small">files · shell · Git · tests</text>
+    </g>
+  </g>
+
+  <g>
+    <rect x="76" y="396" width="150" height="144" rx="18" fill="#091522" stroke="#24445d" stroke-width="2"/>
+    <text x="151" y="432" text-anchor="middle" class="small">ONE WORKSPACE</text>
+    <text x="151" y="468" text-anchor="middle" class="label">Shared by</text>
+    <text x="151" y="500" text-anchor="middle" class="label">all upstreams</text>
+    <path d="M226 468H265" stroke="#3ba0ff" stroke-width="3" stroke-dasharray="7 7"/>
+  </g>
+
+  <path d="M715 622V684" stroke="#3ba0ff" stroke-width="4" marker-end="url(#arrowBlue)"/>
+  <g filter="url(#shadow)">
+    <rect x="345" y="700" width="740" height="132" rx="24" fill="#091813" stroke="#2d8d64" stroke-width="3"/>
+    <path d="M404 744h38l14 13h54v38H404z" fill="#123b2b" stroke="#47ba83" stroke-width="3" stroke-linejoin="round"/>
+    <text x="544" y="762" class="label" fill="#dff8eb">Active local Workspace</text>
+    <text x="544" y="797" class="small">read · edit · patch · commands · tests · Git · images · history</text>
+  </g>
+
+  <g>
+    <path d="M1250 228V330H1285" fill="none" stroke="#9c7cff" stroke-width="3" stroke-dasharray="9 8" marker-end="url(#arrowViolet)"/>
+    <rect x="1215" y="342" width="305" height="108" rx="18" fill="#151226" stroke="#6957b7" stroke-width="2"/>
+    <text x="1367" y="382" text-anchor="middle" class="small" fill="#b8a7ff">OPTIONAL MODEL PATH</text>
+    <text x="1367" y="416" text-anchor="middle" class="label">ChatGPT Web bridge</text>
+    <path d="M1367 450V510" stroke="#9c7cff" stroke-width="3" stroke-dasharray="9 8" marker-end="url(#arrowViolet)"/>
+    <rect x="1215" y="524" width="305" height="108" rx="18" fill="#151226" stroke="#6957b7" stroke-width="2"/>
+    <text x="1367" y="568" text-anchor="middle" class="label">Your ChatGPT Web</text>
+    <text x="1367" y="600" text-anchor="middle" class="small">subscription allowance</text>
+    <text x="1367" y="676" text-anchor="middle" class="small" fill="#9d8bd7">Use it when you want another model path</text>
+  </g>
+</svg>

@@ -18,6 +18,40 @@ const MAX_SEARCH_LIMIT: usize = 50;
 const DEFAULT_READ_MAX_BYTES: usize = 32 * 1024;
 const MAX_READ_MAX_BYTES: usize = 64 * 1024;
 
+pub(crate) fn refresh_derived_memory(workspace_root: &std::path::Path) -> WorkspaceResult<()> {
+    let workspace = crate::tools::workspace::Workspace::new(workspace_root.to_path_buf())?;
+    let history_dir = workspace.root().join(storage::DEFAULT_HISTORY_DIR);
+    storage::ensure_directory(&history_dir)?;
+    let _lock = storage::lock_directory(&history_dir)?;
+    let report = storage::scan(&workspace, &history_dir)?;
+    reject_ambiguous_history(&report)?;
+    let previous_state = storage::read_state(&history_dir).ok().flatten();
+    let current_number = previous_state
+        .as_ref()
+        .and_then(|state| {
+            state
+                .current_session
+                .as_ref()
+                .map(|reference| reference.number)
+        })
+        .or_else(|| report.latest_number());
+    let state_revision = previous_state
+        .map(|state| state.state_revision.saturating_add(1))
+        .unwrap_or(1);
+    let manifest = storage::build_manifest(&history_dir, &report);
+    let state = storage::build_state(
+        &report,
+        &manifest,
+        current_number,
+        &now_timestamp(),
+        state_revision,
+    );
+    storage::write_index(&history_dir, &storage::rebuild_index(&report))?;
+    storage::write_manifest(&history_dir, &manifest)?;
+    storage::write_state(&history_dir, &state)?;
+    Ok(())
+}
+
 pub fn bootstrap(ctx: &ToolContext, args: &Value) -> WorkspaceResult<Value> {
     let (session_key, source) = resolve_session_key(args)?;
     let history_dir = resolve_dir(ctx, args)?;
@@ -142,7 +176,7 @@ pub fn bootstrap(ctx: &ToolContext, args: &Value) -> WorkspaceResult<Value> {
 
     let refreshed = storage::scan(&ctx.workspace, &history_dir)?;
     reject_ambiguous_history(&refreshed)?;
-    let manifest = storage::build_manifest(&refreshed);
+    let manifest = storage::build_manifest(&history_dir, &refreshed);
     let previous_state_revision = storage::read_state(&history_dir)
         .ok()
         .flatten()
@@ -273,7 +307,7 @@ pub fn checkpoint(ctx: &ToolContext, args: &Value) -> WorkspaceResult<Value> {
     }
 
     let refreshed = storage::scan(&ctx.workspace, &history_dir)?;
-    let manifest = storage::build_manifest(&refreshed);
+    let manifest = storage::build_manifest(&history_dir, &refreshed);
     let state_revision = storage::read_state(&history_dir)
         .ok()
         .flatten()
@@ -326,13 +360,15 @@ pub fn checkpoint(ctx: &ToolContext, args: &Value) -> WorkspaceResult<Value> {
 pub fn search(ctx: &ToolContext, args: &Value) -> WorkspaceResult<Value> {
     let history_dir = resolve_dir(ctx, args)?;
     let report = storage::scan(&ctx.workspace, &history_dir)?;
+    let current_manifest = storage::build_manifest(&history_dir, &report);
     let manifest = storage::read_manifest(&history_dir)
         .ok()
         .flatten()
         .filter(|manifest| {
-            manifest.archive_revision == storage::build_manifest(&report).archive_revision
+            manifest.archive_revision == current_manifest.archive_revision
+                && manifest.memory_revision == current_manifest.memory_revision
         })
-        .unwrap_or_else(|| storage::build_manifest(&report));
+        .unwrap_or(current_manifest);
     let query = args
         .get("query")
         .and_then(Value::as_str)
@@ -483,7 +519,7 @@ pub fn validate(ctx: &ToolContext, args: &Value) -> WorkspaceResult<Value> {
     let repaired = if repair {
         let _lock = storage::lock_directory(&history_dir)?;
         let locked_report = storage::scan(&ctx.workspace, &history_dir)?;
-        let manifest = storage::build_manifest(&locked_report);
+        let manifest = storage::build_manifest(&history_dir, &locked_report);
         let state_revision = storage::read_state(&history_dir)
             .ok()
             .flatten()

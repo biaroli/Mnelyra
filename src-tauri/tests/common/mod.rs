@@ -13,6 +13,32 @@ pub struct FixtureWorkspace {
     _temp: tempfile::TempDir,
 }
 
+fn seed_fixture(root: &Path, name: &str) -> std::io::Result<()> {
+    fs::create_dir_all(root.join("src"))?;
+    fs::write(root.join("README.md"), "project\n")?;
+    fs::write(
+        root.join(".gitignore"),
+        "node_modules/\ndist/\n.reference/\n*.log\n",
+    )?;
+    match name {
+        "tiny-js-project" => {
+            fs::write(
+                root.join("src/math.js"),
+                "export function add(a, b) {\n  return a + b;\n}\n",
+            )?;
+            fs::write(
+                root.join("package.json"),
+                "{\"name\":\"tiny-js-project\",\"private\":true}\n",
+            )?;
+        }
+        "malicious-project" => {
+            fs::write(root.join("src/placeholder.txt"), "malicious fixture\n")?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 pub fn fixtures_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../old/tests/compliance/fixtures")
 }
@@ -29,19 +55,18 @@ fn prepare_fixture(name: &str, symlink_escape: bool) -> FixtureWorkspace {
     let temp = tempfile::tempdir().expect("tempdir");
     let parent = temp.path();
     let source = fixtures_root().join(name);
-    assert!(source.is_dir(), "missing fixture: {}", source.display());
     let root = parent.join(name);
-    copy_dir_all(&source, &root).expect("copy fixture");
+    if source.is_dir() {
+        copy_dir_all(&source, &root).expect("copy fixture");
+    } else {
+        seed_fixture(&root, name).expect("seed embedded fixture");
+    }
     let outside_secret = parent.join("outside-secret.txt");
-    fs::write(
-        &outside_secret,
-        fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../old/tests/compliance/outside-secret.txt"),
-        )
-        .expect("outside-secret.txt"),
-    )
-    .expect("write outside secret");
+    let legacy_secret =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../old/tests/compliance/outside-secret.txt");
+    let secret = fs::read_to_string(&legacy_secret)
+        .unwrap_or_else(|_| "TOP_SECRET_DO_NOT_READ\n".to_string());
+    fs::write(&outside_secret, secret).expect("write outside secret");
     materialize_runtime_files(&root, &outside_secret, name);
     if symlink_escape {
         let link = root.join("outside-link.txt");

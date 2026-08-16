@@ -424,7 +424,6 @@ pub(crate) fn frpc_binary_name() -> &'static str {
 pub(crate) fn frpc_log_name(kind: TunnelServiceKind) -> &'static str {
     match kind {
         TunnelServiceKind::Mcp => "frpc-mcp.log",
-        TunnelServiceKind::Actions => "frpc-actions.log",
     }
 }
 
@@ -513,9 +512,8 @@ pub(crate) fn classify_public_mcp_body(status: u16, body: &str) -> PublicMcpProb
         return PublicMcpProbe::FrpNotRouted;
     }
     if status == 200
-        && (lower.contains("rootrelay")
-            || lower.contains("codex-web")
-            || lower.contains("web-codex")
+        && (lower.contains("mnelyra")
+            || lower.contains("rootrelay")
             || lower.contains("protocolversion")
             || lower.contains("\"name\""))
     {

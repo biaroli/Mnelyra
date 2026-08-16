@@ -235,6 +235,7 @@ async fn run_command(
 ) -> Result<Value, WorkspaceError> {
     let (program, args) = parse_and_resolve(cmd, cwd, ctx.workspace.root(), &ctx.policy)?;
     let start = Instant::now();
+    let activity_guard = ctx.acquire_activity(crate::activity::ActivityKind::ExecSession)?;
 
     let mut command = command_for_program(&program, &args);
     command
@@ -261,7 +262,9 @@ async fn run_command(
         }),
     })?;
 
-    let session = ctx.sessions.insert(ExecSession::new_with_mode(child, tty));
+    let session = ctx
+        .sessions
+        .insert(ExecSession::new_with_activity(child, tty, activity_guard));
     session.spawn_readers().await;
     let deadline = start + limit;
 
@@ -715,7 +718,8 @@ mod tests {
         // Ensure console-subsystem programs (python.exe) also go through the
         // hidden-window flag path; Command does not expose creation_flags for
         // direct assertion, so this only verifies construction still succeeds.
-        let python = command_for_program("C:/Python312/python.exe", &["-c".into(), "print(1)".into()]);
+        let python =
+            command_for_program("C:/Python312/python.exe", &["-c".into(), "print(1)".into()]);
         assert_eq!(
             python.as_std().get_program().to_string_lossy(),
             "C:/Python312/python.exe"

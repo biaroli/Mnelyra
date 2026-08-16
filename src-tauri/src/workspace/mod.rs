@@ -1,6 +1,5 @@
+pub mod activation;
 mod model;
 pub mod resources;
 
-pub use model::{
-    ActionsConfig, AuthConfig, RuntimeConfig, RuntimeStatusDto, TunnelConfig, WorkspaceProfile,
-};
+pub use model::{AuthConfig, RuntimeConfig, RuntimeStatusDto, TunnelConfig, WorkspaceProfile};

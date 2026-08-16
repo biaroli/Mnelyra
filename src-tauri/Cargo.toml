@@ -1,8 +1,8 @@
 [package]
 name = "rootrelay"
-version = "0.1.0"
-description = "Desktop MCP workspace relay for MCP-compatible clients"
-authors = ["biaroli"]
+version = "0.2.0"
+description = "Shared local workspace and MCP relay for ChatGPT, Claude, Codex, and other clients"
+authors = ["Mnelyra Contributors"]
 edition = "2021"
 
 [lib]
@@ -52,6 +52,7 @@ windows = { version = "0.61", features = [
     "Win32_Security",
     "Win32_Storage_FileSystem",
     "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_JobObjects",
     "Win32_System_ProcessStatus",
     "Win32_System_Threading",
     "Win32_UI_Shell",

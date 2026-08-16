@@ -47,8 +47,10 @@ pub(crate) mod windows;
 
 mod open;
 mod paths;
+mod process_tree;
 
 pub use open::{is_allowed_url, open_path_in_file_manager, open_url};
+pub(crate) use process_tree::ProcessTreeGuard;
 
 #[cfg(target_os = "linux")]
 pub use linux::LinuxPlatform;

@@ -49,8 +49,8 @@ fn policy_tool_err(err: PolicyError) -> Value {
     })
 }
 
-/// **唯一工具执行入口**。MCP `tools/call` 与 Actions `POST /actions/{tool}` 必须且只能调用此函数。
-/// 策略校验、分发、错误格式在此统一，两路传输层不得另做执行前校验（Actions 仅允许额外的暴露层 `validate_actions_exposure`）。
+/// **唯一工具执行入口**。MCP `tools/call` 必须且只能调用此函数。
+/// 策略校验、分发与错误格式在此统一。
 pub fn call_tool(ctx: &ToolContext, name: &str, args: &Value) -> Value {
     let effective_args = apply_default_cwd(ctx, name, args);
     if let Err(e) = validate_tool_arguments_for_workspace(
@@ -384,14 +384,20 @@ fn filter_exposed_actions(ctx: &ToolContext, actions: Vec<String>) -> Vec<String
 }
 
 pub fn server_info(ctx: &ToolContext) -> Result<Value, WorkspaceError> {
-    let tools = crate::tools::registry::exposed_tool_names(&ctx.tool_profile);
+    let tools = crate::tools::registry::exposed_tool_names(&ctx.tool_profile)
+        .into_iter()
+        .filter(|name| {
+            crate::tools::policy::ceiling_allows_tool(&ctx.policy.permission_ceiling, name)
+        })
+        .collect::<Vec<_>>();
     Ok(tool_ok(json!({
-        "server": "rootrelay",
-        "title": "RootRelay",
+        "server": "mnelyra",
+        "title": "Mnelyra",
         "version": env!("CARGO_PKG_VERSION"),
         "protocol_version": "2025-06-18",
         "workspace": ctx.workspace.root_display(),
         "permission_mode": ctx.permission_mode,
+        "permission_ceiling": ctx.policy.permission_ceiling,
         "default_cwd": ctx.default_cwd_display(),
         "network_allowed": ctx.policy.network_allowed(),
         "tool_profile": ctx.tool_profile,
@@ -407,6 +413,7 @@ pub fn check_exec_environment(ctx: &ToolContext) -> Result<Value, WorkspaceError
     Ok(tool_ok(json!({
         "workspace": ctx.workspace.root_display(),
         "permission_mode": ctx.permission_mode,
+        "permission_ceiling": ctx.policy.permission_ceiling,
         "network_allowed": ctx.policy.network_allowed(),
         "landlock_enabled": false,
         "filesystem_sandbox": {
@@ -415,8 +422,8 @@ pub fn check_exec_environment(ctx: &ToolContext) -> Result<Value, WorkspaceError
             "default_scope": "workspace",
             "host_scope_available": false
         },
-        "global_tmp_write": if ctx.permission_mode == "dangerous" { "allowed" } else { "tmp-prefix" },
-        "workspace_exec_available": true,
+        "global_tmp_write": if ctx.policy.permission_ceiling == "read_only" { "blocked" } else if ctx.permission_mode == "dangerous" { "allowed" } else { "tmp-prefix" },
+        "workspace_exec_available": ctx.policy.permission_ceiling != "read_only",
         "workspace_exec_sandbox_enforced": false,
         "workspace_exec_boundary": "policy_only",
         "system_command_allowlist": ctx.policy.allowed_commands.iter().cloned().collect::<Vec<_>>(),

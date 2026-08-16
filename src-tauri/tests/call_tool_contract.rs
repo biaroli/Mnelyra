@@ -3,8 +3,8 @@ mod common;
 use std::fs;
 use std::process::Command;
 
-use rootrelay_lib::tools::list_tools_for_profile;
 use common::*;
+use rootrelay_lib::tools::list_tools_for_profile;
 use serde_json::{json, Value};
 
 #[cfg(windows)]
@@ -18,7 +18,7 @@ fn server_info_returns_workspace_and_tools() {
     let ctx = ctx_for(&fx.root);
     let out = invoke(&ctx, "server_info", json!({}));
     let payload = assert_ok(&out);
-    assert_eq!(payload["server"], "rootrelay");
+    assert_eq!(payload["server"], "mnelyra");
     assert_eq!(payload["version"], env!("CARGO_PKG_VERSION"));
     assert!(payload["tools"].is_array());
     assert!(payload["tool_count"].as_u64().unwrap_or(0) > 0);

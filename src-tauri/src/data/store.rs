@@ -13,13 +13,7 @@ const SHARED_KEYS: &[&str] = &[
     "oauth_client_id",
     "bearer_token",
     "oauth_client_secret",
-    "oauth_password",
     "oauth_token_secret",
-    "actions_oauth_client_id",
-    "actions_api_key",
-    "actions_oauth_client_secret",
-    "actions_oauth_password",
-    "actions_oauth_token_secret",
 ];
 
 #[derive(Debug)]
@@ -47,14 +41,6 @@ impl DataStore {
                     data.shared_secrets.insert(
                         "oauth_client_id".to_string(),
                         profile.auth.oauth_client_id.clone(),
-                    );
-                }
-                if !data.shared_secrets.contains_key("actions_oauth_client_id")
-                    && !profile.actions.oauth_client_id.trim().is_empty()
-                {
-                    data.shared_secrets.insert(
-                        "actions_oauth_client_id".to_string(),
-                        profile.actions.oauth_client_id.clone(),
                     );
                 }
                 data.general = crate::settings::GlobalGeneralConfig::from_profile(&profile);
@@ -87,8 +73,10 @@ impl DataStore {
                 data.general = crate::settings::GlobalGeneralConfig::from_profile(&profile);
 
                 if let Some(secrets) = data.workspace_secrets.get(&profile.id).cloned() {
-                    for key in ["cloudflare_token", "actions_cloudflare_token"] {
-                        if let Some(value) = secrets.get(key).filter(|value| !value.trim().is_empty()) {
+                    for key in ["cloudflare_token"] {
+                        if let Some(value) =
+                            secrets.get(key).filter(|value| !value.trim().is_empty())
+                        {
                             data.shared_secrets.insert(key.to_string(), value.clone());
                         }
                     }
@@ -97,8 +85,10 @@ impl DataStore {
                         .app_secrets
                         .entry("global_tunnel".to_string())
                         .or_default();
-                    for key in ["frp_token", "actions_frp_token"] {
-                        if let Some(value) = secrets.get(key).filter(|value| !value.trim().is_empty()) {
+                    for key in ["frp_token"] {
+                        if let Some(value) =
+                            secrets.get(key).filter(|value| !value.trim().is_empty())
+                        {
                             global_tunnel.insert(key.to_string(), value.clone());
                         }
                     }
@@ -115,8 +105,54 @@ impl DataStore {
         } else {
             false
         };
+        let removed_obsolete_auth = {
+            let mut changed = false;
+            for key in [
+                "oauth_password",
+                "actions_oauth_password",
+                "actions_oauth_client_id",
+                "actions_api_key",
+                "actions_oauth_client_secret",
+                "actions_oauth_token_secret",
+                "actions_cloudflare_token",
+                "actions_frp_token",
+            ] {
+                changed |= data.shared_secrets.remove(key).is_some();
+            }
+            for secrets in data.workspace_secrets.values_mut() {
+                for key in [
+                    "oauth_password",
+                    "actions_oauth_password",
+                    "actions_api_key",
+                    "actions_oauth_client_secret",
+                    "actions_oauth_token_secret",
+                    "actions_cloudflare_token",
+                    "actions_frp_token",
+                ] {
+                    changed |= secrets.remove(key).is_some();
+                }
+            }
+            if let Some(tunnel) = data.app_secrets.get_mut("global_tunnel") {
+                changed |= tunnel.remove("actions_frp_token").is_some();
+            }
+            changed
+        };
+        let normalized_permission_ceiling = if matches!(
+            data.general.permission_ceiling.as_str(),
+            "automatic" | "read_only" | "custom"
+        ) {
+            false
+        } else {
+            data.general.permission_ceiling = "automatic".to_string();
+            true
+        };
         let store = Self { data };
-        if !existed_before || migrated_global || migrated_runtime_v2 {
+        if !existed_before
+            || migrated_global
+            || migrated_runtime_v2
+            || removed_obsolete_auth
+            || normalized_permission_ceiling
+        {
             store.persist_unlocked()?;
         }
         if !existed_before {
@@ -201,14 +237,9 @@ impl DataStore {
     }
 
     pub fn init_workspace_secrets(&mut self, profile_id: &str) -> AppResult<()> {
-        // oauth_client_secret is optional for MCP OAuth (ChatGPT PKCE); not auto-generated.
-        self.set_workspace_secret(profile_id, "oauth_password", &random_secret())?;
+        self.set_workspace_secret(profile_id, "oauth_client_secret", &random_secret())?;
         self.set_workspace_secret(profile_id, "oauth_token_secret", &random_secret())?;
         self.set_workspace_secret(profile_id, "bearer_token", &random_secret())?;
-        self.set_workspace_secret(profile_id, "actions_api_key", &random_secret())?;
-        self.set_workspace_secret(profile_id, "actions_oauth_client_secret", &random_secret())?;
-        self.set_workspace_secret(profile_id, "actions_oauth_password", &random_secret())?;
-        self.set_workspace_secret(profile_id, "actions_oauth_token_secret", &random_secret())?;
         Ok(())
     }
 
@@ -252,7 +283,11 @@ impl DataStore {
         self.save()
     }
 
-    pub fn regenerate_workspace_secret(&mut self, profile_id: &str, key: &str) -> AppResult<String> {
+    pub fn regenerate_workspace_secret(
+        &mut self,
+        profile_id: &str,
+        key: &str,
+    ) -> AppResult<String> {
         let value = shared_value_for_key(key);
         self.set_workspace_secret(profile_id, key, &value)?;
         Ok(value)
@@ -307,7 +342,6 @@ impl DataStore {
         }
         self.save()
     }
-
 }
 
 fn lock_data_file() -> AppResult<std::sync::MutexGuard<'static, ()>> {
@@ -322,9 +356,7 @@ fn random_secret() -> String {
 
 fn shared_value_for_key(key: &str) -> String {
     if key == "oauth_client_id" {
-        format!("rootrelay-client-{}", &uuid::Uuid::new_v4().to_string()[..12])
-    } else if key == "actions_oauth_client_id" {
-        format!("rootrelay-actions-{}", &uuid::Uuid::new_v4().to_string()[..12])
+        format!("mnelyra-client-{}", &uuid::Uuid::new_v4().to_string()[..12])
     } else {
         random_secret()
     }
@@ -351,7 +383,7 @@ mod tests {
     #[test]
     fn shared_oauth_client_id_uses_client_id_format() {
         let value = shared_value_for_key("oauth_client_id");
-        assert!(value.starts_with("rootrelay-client-"));
-        assert_eq!(value.len(), "rootrelay-client-".len() + 12);
+        assert!(value.starts_with("mnelyra-client-"));
+        assert_eq!(value.len(), "mnelyra-client-".len() + 12);
     }
 }

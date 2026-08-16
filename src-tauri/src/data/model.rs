@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::settings::{DownloadConfig, FrpProfile, GlobalAuthConfig, GlobalGeneralConfig};
+use crate::settings::{
+    DownloadConfig, FrpProfile, GlobalAuthConfig, GlobalGeneralConfig, OpenAiConnectorConfig,
+};
 use crate::workspace::WorkspaceProfile;
 
 /// Unified on-disk payload stored in `data/profiles.json`.
@@ -20,6 +22,8 @@ pub struct AppData {
     pub auth: GlobalAuthConfig,
     #[serde(default)]
     pub general: GlobalGeneralConfig,
+    #[serde(default)]
+    pub openai_connector: OpenAiConnectorConfig,
     #[serde(default)]
     pub shared_secrets: HashMap<String, String>,
     #[serde(default)]

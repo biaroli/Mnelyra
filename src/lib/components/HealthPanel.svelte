@@ -32,7 +32,7 @@
     <div>
       <h3 class="font-semibold">健康检查</h3>
       <p class="mt-1 text-sm text-[var(--color-text-muted)]">
-        MCP、Actions 本地/公网 endpoint 与 OAuth 元数据
+        MCP 本地/公网 endpoint 与 OAuth 元数据
       </p>
     </div>
     <button

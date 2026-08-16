@@ -1,14 +1,15 @@
 <script lang="ts">
-  import "../app.css";
+  import "../mnelyra.css";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
   import { confirm, open } from "@tauri-apps/plugin-dialog";
   import {
+    Cable,
     FolderOpen,
     FolderPlus,
     KeyRound,
-    RadioTower,
+    Database,
     RefreshCw,
     SlidersHorizontal,
     Trash2,
@@ -20,17 +21,25 @@
   import {
     createWorkspace,
     deleteWorkspace,
-    getActionsRuntimeStatus,
     getRuntimeStatus,
     listWorkspaces,
   } from "$lib/api/workspaces";
+  import { getActiveWorkspaceState, getWorkspaceActivity } from "$lib/api/activity";
+  import { getProviderStatus } from "$lib/api/providers";
   import { getLastWorkspaceId } from "$lib/api/settings";
-  import { actionsRuntimeStates, mcpRuntimeStates, workspaces } from "$lib/stores/app";
+  import {
+    activeWorkspaceState,
+    mcpRuntimeStates,
+    providerStatuses,
+    workspaceActivity,
+    workspaces,
+  } from "$lib/stores/app";
   import { showToast } from "$lib/stores/toast";
   import { startUiMemoryGuard } from "$lib/ui-memory-guard";
   import { startCloseGuard } from "$lib/close-guard";
   import CloseConfirmDialog from "$lib/components/CloseConfirmDialog.svelte";
   import { checkForUpdates, updateState } from "$lib/stores/update";
+  import { uiLocale } from "$lib/stores/locale";
   import type { RuntimeState } from "$lib/types";
   import { workspaceRootName, type WorkspaceProfile } from "$lib/types";
 
@@ -42,30 +51,80 @@
   let contextWorkspace = $state<WorkspaceProfile | null>(null);
   let contextX = $state(0);
   let contextY = $state(0);
+  let authorityRefreshInFlight = false;
+  let providerRefreshInFlight = false;
+  const zh = $derived($uiLocale === "zh-CN");
+
+  async function refreshAuthority() {
+    if (authorityRefreshInFlight) return;
+    authorityRefreshInFlight = true;
+    try {
+      const active = await getActiveWorkspaceState();
+      activeWorkspaceState.set(active);
+      const ids = new Set<string>();
+      if (active.workspaceId) ids.add(active.workspaceId);
+      const selected = $page.params.id;
+      if (selected) ids.add(selected);
+      if (ids.size === 0) return;
+      const entries = await Promise.all(
+        [...ids].map(async (id) => [id, await getWorkspaceActivity(id)] as const),
+      );
+      workspaceActivity.update((current) => {
+        const next = { ...current };
+        for (const [id, activity] of entries) next[id] = activity;
+        return next;
+      });
+    } catch {
+      // Keep the last proven backend snapshot across transient IPC read failures.
+    } finally {
+      authorityRefreshInFlight = false;
+    }
+  }
+
+  function openConnectors() {
+    goto("/connectors");
+  }
+
+  async function refreshProviders() {
+    if (providerRefreshInFlight) return;
+    providerRefreshInFlight = true;
+    try {
+      const codex = await getProviderStatus("codex");
+      providerStatuses.update((current) => ({ ...current, [codex.providerId]: codex }));
+    } catch {
+      // Provider discovery is optional; Mnelyra remains healthy without a provider runtime.
+    } finally {
+      providerRefreshInFlight = false;
+    }
+  }
 
   async function refreshWorkspaces() {
     const items = await listWorkspaces();
     workspaces.set(items);
 
     const mcpStates: Record<string, RuntimeState> = {};
-    const actionsStates: Record<string, RuntimeState> = {};
+    const activityStates: Record<string, Awaited<ReturnType<typeof getWorkspaceActivity>>> = {};
     await Promise.all(
       items.map(async (item) => {
         try {
-          const [mcp, actions] = await Promise.all([
+          const [mcp, activity] = await Promise.all([
             getRuntimeStatus(item.id),
-            getActionsRuntimeStatus(item.id),
+            getWorkspaceActivity(item.id),
           ]);
           mcpStates[item.id] = mcp.state;
-          actionsStates[item.id] = actions.state;
+          activityStates[item.id] = activity;
         } catch {
           mcpStates[item.id] = "stopped";
-          actionsStates[item.id] = "stopped";
         }
       }),
     );
     mcpRuntimeStates.set(mcpStates);
-    actionsRuntimeStates.set(actionsStates);
+    workspaceActivity.set(activityStates);
+    try {
+      activeWorkspaceState.set(await getActiveWorkspaceState());
+    } catch {
+      // Keep the last known backend snapshot if a transient IPC read fails.
+    }
   }
 
   async function createWorkspaceFromPath(path: string) {
@@ -119,7 +178,7 @@
     contextWorkspace = null;
     if (!workspace) return;
     const confirmed = await confirm(
-      `确定从 RootRelay 中移除「${workspaceRootName(workspace.path)}」？\n\n不会删除磁盘中的项目文件。`,
+      `确定从 Mnelyra 中移除「${workspaceRootName(workspace.path)}」？\n\n不会删除磁盘中的项目文件。`,
       {
         title: "移除工作区",
         kind: "warning",
@@ -144,10 +203,6 @@
     goto(`/workspace/${id}`);
   }
 
-  function openFrpSettings() {
-    goto("/settings/frp");
-  }
-
   function openGeneralSettings() {
     goto("/settings/general");
   }
@@ -158,6 +213,10 @@
 
   function openKeysSettings() {
     goto("/settings/keys");
+  }
+
+  function openMemory() {
+    goto("/memory");
   }
 
   onMount(() => {
@@ -178,7 +237,16 @@
       }
     })();
     void checkForUpdates();
+    void refreshProviders();
+    const authorityTimer = window.setInterval(() => {
+      void refreshAuthority();
+    }, 1200);
+    const providerTimer = window.setInterval(() => {
+      void refreshProviders();
+    }, 3000);
     return () => {
+      window.clearInterval(authorityTimer);
+      window.clearInterval(providerTimer);
       stopGuard();
       stopClose();
     };
@@ -186,6 +254,24 @@
 </script>
 
 <AppShell onAddWorkspace={addWorkspace}>
+  {#snippet primaryNav()}
+    <button
+      type="button"
+      class="tx-settings-link {$page.url.pathname === '/connectors' ? 'active' : ''}"
+      onclick={openConnectors}
+    >
+      <Cable size={14} strokeWidth={1.8} />
+      <span>{zh ? "连接" : "Connections"}</span>
+    </button>
+    <button
+      type="button"
+      class="tx-settings-link {$page.url.pathname === '/memory' ? 'active' : ''}"
+      onclick={openMemory}
+    >
+      <Database size={14} strokeWidth={1.8} />
+      <span>{zh ? "记忆" : "Memory"}</span>
+    </button>
+  {/snippet}
   {#snippet settingsNav()}
     <button
       type="button"
@@ -193,7 +279,7 @@
       onclick={openGeneralSettings}
     >
       <SlidersHorizontal size={14} strokeWidth={1.8} />
-      <span>通用</span>
+      <span>{zh ? "通用" : "General"}</span>
     </button>
     <button
       type="button"
@@ -201,15 +287,7 @@
       onclick={openKeysSettings}
     >
       <KeyRound size={14} strokeWidth={1.8} />
-      <span>认证</span>
-    </button>
-    <button
-      type="button"
-      class="tx-settings-link {$page.url.pathname === '/settings/frp' ? 'active' : ''}"
-      onclick={openFrpSettings}
-    >
-      <RadioTower size={14} strokeWidth={1.8} />
-      <span>FRP 配置</span>
+      <span>{zh ? "认证" : "Authentication"}</span>
     </button>
     <button
       type="button"
@@ -221,7 +299,7 @@
         strokeWidth={1.8}
         class={$updateState.phase === "checking" ? "animate-spin" : ""}
       />
-      <span>更新</span>
+      <span>{zh ? "更新" : "Updates"}</span>
       {#if $updateState.phase === "available"}
         <span
           class="ml-auto h-1.5 w-1.5 rounded-full bg-[var(--color-accent)] shadow-[0_0_8px_var(--color-accent)]"
@@ -236,9 +314,10 @@
       {#each $workspaces as workspace (workspace.id)}
         <WorkspaceNavItem
           workspace={workspace}
-          active={$page.url.pathname === `/workspace/${workspace.id}`}
+          selected={$page.url.pathname === `/workspace/${workspace.id}`}
+          activeRoot={$activeWorkspaceState.workspaceId === workspace.id}
+          activity={$workspaceActivity[workspace.id]}
           mcpState={$mcpRuntimeStates[workspace.id] ?? "stopped"}
-          actionsState={$actionsRuntimeStates[workspace.id] ?? "stopped"}
           onClick={() => openWorkspace(workspace.id)}
           onContextMenu={(event) => openWorkspaceContext(workspace, event)}
         />
@@ -262,13 +341,13 @@
     <dialog class="tx-modal" open aria-labelledby="add-workspace-title">
       <div class="tx-modal__head">
         <div>
-          <p class="tx-modal__kicker">OPEN LOCAL ROOT</p>
-          <h2 id="add-workspace-title" class="tx-modal__title">打开项目</h2>
+          <p class="tx-modal__kicker">{zh ? "本地工作区" : "LOCAL WORKSPACE"}</p>
+          <h2 id="add-workspace-title" class="tx-modal__title">{zh ? "打开项目" : "Open project"}</h2>
         </div>
         <button
           type="button"
           class="tx-icon-button"
-          aria-label="关闭"
+          aria-label={zh ? "关闭" : "Close"}
           disabled={addingWorkspace}
           onclick={() => (addWorkspaceOpen = false)}
         >
@@ -284,7 +363,7 @@
         }}
       >
         <label class="tx-field flex-1">
-          <span class="tx-label">项目根目录</span>
+          <span class="tx-label">{zh ? "项目根目录" : "Project root"}</span>
           <input
             class="tx-input tx-mono"
             type="text"
@@ -298,11 +377,11 @@
           disabled={addingWorkspace || !manualWorkspacePath.trim()}
         >
           <FolderPlus size={15} />
-          {addingWorkspace ? "打开中…" : "打开"}
+          {addingWorkspace ? (zh ? "打开中…" : "Opening…") : (zh ? "打开" : "Open")}
         </button>
       </form>
 
-      <div class="tx-modal__divider"><span>或</span></div>
+      <div class="tx-modal__divider"><span>{zh ? "或" : "OR"}</span></div>
 
       <button
         type="button"
@@ -312,8 +391,8 @@
       >
         <span class="tx-folder-picker__icon"><FolderOpen size={19} strokeWidth={1.8} /></span>
         <span class="min-w-0 flex-1 text-left">
-          <strong>从文件夹选择</strong>
-          <small>在系统文件选择器中定位项目根目录</small>
+          <strong>{zh ? "从文件夹选择" : "Choose a folder"}</strong>
+          <small>{zh ? "在系统文件选择器中定位项目根目录" : "Locate the project root with the system folder picker"}</small>
         </span>
         <span class="tx-folder-picker__arrow">↗</span>
       </button>

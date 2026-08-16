@@ -4,6 +4,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use fs2::FileExt;
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use crate::tools::workspace::{relative_display, Workspace, WorkspaceError, WorkspaceResult};
@@ -11,15 +12,30 @@ use crate::tools::workspace::{relative_display, Workspace, WorkspaceError, Works
 use super::markdown;
 use super::model::{
     HistoryDocument, HistoryIndex, IndexEntry, ManifestEntry, MemoryManifest, MemoryReference,
-    MemoryState, ScanReport,
+    MemoryState, ProviderMemorySource, ScanReport,
 };
 
 pub const DEFAULT_HISTORY_DIR: &str = ".rootrelay/history-session";
-const LEGACY_HISTORY_DIR: &str = ".web-codex/history-session";
 const STATE_ITEM_LIMIT: usize = 12;
 const STATE_TEXT_LIMIT: usize = 512;
 const STATE_FOCUS_LIMIT: usize = 2_048;
 const STATE_REFERENCE_LIMIT: usize = 8;
+const STATE_PROVIDER_SOURCE_LIMIT: usize = 24;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProviderCheckpointFile {
+    checkpoint_id: String,
+    provider_id: String,
+    mnelyra_session_id: String,
+    provider_session_id: String,
+    #[serde(default)]
+    provider_turn_id: Option<String>,
+    captured_at: String,
+    content_sha256: String,
+    #[serde(default)]
+    source: String,
+}
 
 pub struct HistoryLock {
     file: File,
@@ -51,20 +67,7 @@ pub fn resolve_history_dir(
         }
     }
 
-    let default_dir = if workspace
-        .root()
-        .join(LEGACY_HISTORY_DIR.replace('/', std::path::MAIN_SEPARATOR_STR))
-        .is_dir()
-        && !workspace
-            .root()
-            .join(DEFAULT_HISTORY_DIR.replace('/', std::path::MAIN_SEPARATOR_STR))
-            .exists()
-    {
-        LEGACY_HISTORY_DIR
-    } else {
-        DEFAULT_HISTORY_DIR
-    };
-    let raw = history_dir.unwrap_or(default_dir).trim();
+    let raw = history_dir.unwrap_or(DEFAULT_HISTORY_DIR).trim();
     if raw.is_empty() || workspace.reject_unsafe_text(raw).is_err() {
         return Err(WorkspaceError::path_outside_workspace());
     }
@@ -289,7 +292,7 @@ pub fn write_state(history_dir: &Path, state: &MemoryState) -> WorkspaceResult<(
     )
 }
 
-pub fn build_manifest(report: &ScanReport) -> MemoryManifest {
+pub fn build_manifest(history_dir: &Path, report: &ScanReport) -> MemoryManifest {
     let entries = report
         .documents
         .iter()
@@ -304,15 +307,25 @@ pub fn build_manifest(report: &ScanReport) -> MemoryManifest {
             keywords: keywords(document),
         })
         .collect::<Vec<_>>();
-    let mut digest = Sha256::new();
+    let mut archive_digest = Sha256::new();
     for entry in &entries {
-        digest.update(entry.number.to_le_bytes());
-        digest.update(entry.sha256.as_bytes());
+        archive_digest.update(entry.number.to_le_bytes());
+        archive_digest.update(entry.sha256.as_bytes());
+    }
+    let archive_revision = format!("sha256:{:x}", archive_digest.finalize());
+    let provider_sources = scan_provider_sources(history_dir);
+    let mut memory_digest = Sha256::new();
+    memory_digest.update(archive_revision.as_bytes());
+    for source in &provider_sources {
+        memory_digest.update(source.checkpoint_id.as_bytes());
+        memory_digest.update(source.content_sha256.as_bytes());
     }
     MemoryManifest {
-        version: 2,
-        archive_revision: format!("sha256:{:x}", digest.finalize()),
+        version: 3,
+        archive_revision,
+        memory_revision: format!("sha256:{:x}", memory_digest.finalize()),
         entries,
+        provider_sources,
     }
 }
 
@@ -372,9 +385,10 @@ pub fn build_state(
         })
         .collect();
     MemoryState {
-        version: 2,
+        version: 3,
         state_revision,
         archive_revision: manifest.archive_revision.clone(),
+        memory_revision: manifest.memory_revision.clone(),
         generated_at: timestamp.to_string(),
         current_session: current_number.and_then(|number| {
             manifest
@@ -391,7 +405,64 @@ pub fn build_state(
         recent_changes,
         open_items,
         references,
+        provider_sources: manifest
+            .provider_sources
+            .iter()
+            .rev()
+            .take(STATE_PROVIDER_SOURCE_LIMIT)
+            .cloned()
+            .collect(),
     }
+}
+
+fn scan_provider_sources(history_dir: &Path) -> Vec<ProviderMemorySource> {
+    let directory = memory_dir(history_dir).join("providers");
+    let Ok(entries) = fs::read_dir(&directory) else {
+        return Vec::new();
+    };
+    let mut sources = entries
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let path = entry.path();
+            if path.extension().and_then(|value| value.to_str()) != Some("json") {
+                return None;
+            }
+            let raw = fs::read_to_string(&path).ok()?;
+            let record: ProviderCheckpointFile = serde_json::from_str(&raw).ok()?;
+            if record.checkpoint_id.trim().is_empty()
+                || record.provider_id.trim().is_empty()
+                || record.content_sha256.len() != 64
+            {
+                return None;
+            }
+            let relative = path
+                .strip_prefix(history_dir)
+                .unwrap_or(path.as_path())
+                .to_string_lossy()
+                .replace('\\', "/");
+            Some(ProviderMemorySource {
+                checkpoint_id: record.checkpoint_id,
+                path: relative,
+                source_kind: if record.source.trim().is_empty() {
+                    "provider_checkpoint".into()
+                } else {
+                    record.source
+                },
+                provider_id: record.provider_id,
+                mnelyra_session_id: record.mnelyra_session_id,
+                provider_session_id: record.provider_session_id,
+                provider_turn_id: record.provider_turn_id,
+                captured_at: record.captured_at,
+                content_sha256: record.content_sha256,
+            })
+        })
+        .collect::<Vec<_>>();
+    sources.sort_by(|a, b| {
+        a.captured_at
+            .cmp(&b.captured_at)
+            .then_with(|| a.checkpoint_id.cmp(&b.checkpoint_id))
+    });
+    sources
 }
 
 fn latest_user_focus(content: &str) -> Option<String> {
@@ -584,5 +655,50 @@ fn io_error(code: &'static str, error: io::Error, retryable: bool) -> WorkspaceE
         category: "filesystem",
         retryable,
         details: serde_json::json!({"kind": format!("{:?}", error.kind())}),
+    }
+}
+
+#[cfg(test)]
+mod provider_memory_tests {
+    use super::*;
+
+    #[test]
+    fn provider_checkpoint_changes_memory_revision_not_archive_revision() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let history_dir = temp.path().join(DEFAULT_HISTORY_DIR);
+        fs::create_dir_all(memory_dir(&history_dir).join("providers")).expect("providers dir");
+        let report = ScanReport::default();
+        let before = build_manifest(&history_dir, &report);
+        fs::write(
+            memory_dir(&history_dir)
+                .join("providers")
+                .join("checkpoint-1.json"),
+            serde_json::to_vec_pretty(&serde_json::json!({
+                "version": 1,
+                "checkpointId": "checkpoint-1",
+                "providerId": "codex",
+                "mnelyraSessionId": "session-1",
+                "workspaceId": "workspace-1",
+                "canonicalWorkspacePath": temp.path().to_string_lossy(),
+                "providerSessionId": "thread-1",
+                "providerTurnId": "turn-1",
+                "capturedAt": "123",
+                "source": "codex-app-server:thread/read",
+                "contentSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "threadMetadata": {},
+                "turnSnapshot": {}
+            }))
+            .expect("checkpoint json"),
+        )
+        .expect("checkpoint write");
+        let after = build_manifest(&history_dir, &report);
+        assert_eq!(before.archive_revision, after.archive_revision);
+        assert_ne!(before.memory_revision, after.memory_revision);
+        assert_eq!(after.provider_sources.len(), 1);
+        assert_eq!(after.provider_sources[0].provider_id, "codex");
+        assert_eq!(
+            after.provider_sources[0].path,
+            "memory/providers/checkpoint-1.json"
+        );
     }
 }

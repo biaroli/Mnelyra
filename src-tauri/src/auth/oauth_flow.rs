@@ -21,7 +21,6 @@ pub const OAUTH_MAX_BODY_BYTES: usize = 8_192;
 pub struct OAuthRuntime {
     pub client_id: String,
     pub client_secret: Option<String>,
-    pub password: String,
     pub token_secret: String,
     pending: Arc<Mutex<HashMap<String, PendingCode>>>,
 }
@@ -51,13 +50,11 @@ impl OAuthRuntime {
         _base_url: String,
         client_id: String,
         client_secret: Option<String>,
-        password: String,
         token_secret: String,
     ) -> Self {
         Self {
             client_id,
             client_secret,
-            password,
             token_secret,
             pending: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -119,17 +116,6 @@ pub struct AuthorizeParams {
     pub state: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct AuthorizeForm {
-    pub client_id: String,
-    pub redirect_uri: String,
-    pub code_challenge: String,
-    pub code_challenge_method: String,
-    #[serde(default)]
-    pub state: String,
-    pub password: String,
-}
-
 #[derive(Debug, Deserialize, Default)]
 pub struct TokenForm {
     pub grant_type: String,
@@ -141,11 +127,7 @@ pub struct TokenForm {
     pub client_secret: String,
 }
 
-pub fn authorize_get(
-    oauth: &OAuthRuntime,
-    params: AuthorizeParams,
-    workspace_path: Option<&str>,
-) -> Response {
+pub fn authorize_get(oauth: &OAuthRuntime, params: AuthorizeParams, server_url: &str) -> Response {
     if params.response_type != "code" {
         return html_error("response_type must be 'code'", StatusCode::BAD_REQUEST);
     }
@@ -158,59 +140,6 @@ pub fn authorize_get(
             StatusCode::BAD_REQUEST,
         );
     }
-    Html(login_page(
-        &params.client_id,
-        &params.redirect_uri,
-        &params.code_challenge,
-        &params.code_challenge_method,
-        &params.state,
-        "",
-        workspace_path,
-    ))
-    .into_response()
-}
-
-pub fn authorize_post(oauth: &OAuthRuntime, form: AuthorizeForm, server_url: &str) -> Response {
-    if !oauth.client_id_allowed(&form.client_id) {
-        return Html(login_page(
-            &form.client_id,
-            &form.redirect_uri,
-            &form.code_challenge,
-            &form.code_challenge_method,
-            &form.state,
-            "Invalid client",
-            None,
-        ))
-        .into_response();
-    }
-    if form.code_challenge_method != "S256" || form.code_challenge.is_empty() {
-        return Html(login_page(
-            &form.client_id,
-            &form.redirect_uri,
-            &form.code_challenge,
-            &form.code_challenge_method,
-            &form.state,
-            "Invalid PKCE parameters",
-            None,
-        ))
-        .into_response();
-    }
-    if !constant_time_eq_str(&form.password, &oauth.password) {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Html(login_page(
-                &form.client_id,
-                &form.redirect_uri,
-                &form.code_challenge,
-                &form.code_challenge_method,
-                &form.state,
-                "Invalid password",
-                None,
-            )),
-        )
-            .into_response();
-    }
-
     let server_url = server_url.trim_end_matches('/').to_string();
     let code = uuid::Uuid::new_v4().to_string().replace('-', "");
     let now = unix_now();
@@ -220,10 +149,10 @@ pub fn authorize_post(oauth: &OAuthRuntime, form: AuthorizeForm, server_url: &st
         pending.insert(
             code.clone(),
             PendingCode {
-                code_challenge: form.code_challenge.clone(),
-                client_id: form.client_id.clone(),
-                redirect_uri: form.redirect_uri.clone(),
-                state: form.state.clone(),
+                code_challenge: params.code_challenge.clone(),
+                client_id: params.client_id.clone(),
+                redirect_uri: params.redirect_uri.clone(),
+                state: params.state.clone(),
                 expires_at: now + OAUTH_CODE_TTL_SECONDS,
                 server_url: server_url.clone(),
             },
@@ -231,13 +160,15 @@ pub fn authorize_post(oauth: &OAuthRuntime, form: AuthorizeForm, server_url: &st
     }
 
     let mut qs = format!("code={}", urlencoding_encode(&code));
-    if !form.state.is_empty() {
-        qs.push_str(&format!("&state={}", urlencoding_encode(&form.state)));
+    if !params.state.is_empty() {
+        qs.push_str(&format!("&state={}", urlencoding_encode(&params.state)));
     }
-    let sep = if form.redirect_uri.contains('?') { '&' } else { '?' };
-    // 授权页面通过 POST 表单提交，但客户端回调必须使用 GET。
-    // 307 会保留 POST 并把表单体转发到 ChatGPT connector，导致 Bad Request。
-    Redirect::to(&format!("{}{}{}", form.redirect_uri, sep, qs)).into_response()
+    let sep = if params.redirect_uri.contains('?') {
+        '&'
+    } else {
+        '?'
+    };
+    Redirect::to(&format!("{}{}{}", params.redirect_uri, sep, qs)).into_response()
 }
 
 pub fn token_exchange(
@@ -247,7 +178,10 @@ pub fn token_exchange(
     server_url: &str,
 ) -> Response {
     if form.grant_type != "authorization_code" {
-        return token_error("unsupported_grant_type", "Only authorization_code is supported");
+        return token_error(
+            "unsupported_grant_type",
+            "Only authorization_code is supported",
+        );
     }
 
     if let Some((id, secret)) = basic_auth_credentials(headers) {
@@ -279,7 +213,10 @@ pub fn token_exchange(
         pending.remove(&form.code)
     };
     let Some(code_data) = code_data else {
-        return token_error("invalid_grant", "Unknown or already-used authorization code");
+        return token_error(
+            "invalid_grant",
+            "Unknown or already-used authorization code",
+        );
     };
     if unix_now() > code_data.expires_at {
         return token_error("invalid_grant", "Authorization code expired");
@@ -369,64 +306,6 @@ fn html_error(message: &str, status: StatusCode) -> Response {
     (status, Html(format!("<h2>Error</h2><p>{message}</p>"))).into_response()
 }
 
-fn login_page(
-    client_id: &str,
-    redirect_uri: &str,
-    code_challenge: &str,
-    code_challenge_method: &str,
-    state: &str,
-    error: &str,
-    workspace_path: Option<&str>,
-) -> String {
-    let error_block = if error.is_empty() {
-        String::new()
-    } else {
-        format!("<p style=\"color:red\">{}</p>", html_escape(error))
-    };
-    let workspace_block = workspace_path
-        .filter(|path| !path.is_empty())
-        .map(|path| format!("<p>Workspace: <code>{}</code></p>", html_escape(path)))
-        .unwrap_or_default();
-    format!(
-        "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'>\
-        <title>Authorize MCP Server</title>\
-        <style>body{{font-family:sans-serif;max-width:380px;margin:4rem auto;padding:1rem}}\
-        input{{width:100%;padding:.5rem;margin:.4rem 0;box-sizing:border-box}}\
-        button{{width:100%;padding:.7rem;background:#0066cc;color:#fff;border:none;cursor:pointer}}</style>\
-        </head><body>\
-        <h2>Authorize RootRelay</h2>\
-        {workspace_block}\
-        <p>Client: <strong>{}</strong></p>\
-        <p>Redirect URI: <code>{}</code></p>\
-        {error_block}\
-        <form method='POST' action='/oauth/authorize'>\
-        <input type='hidden' name='client_id' value='{}'>\
-        <input type='hidden' name='redirect_uri' value='{}'>\
-        <input type='hidden' name='code_challenge' value='{}'>\
-        <input type='hidden' name='code_challenge_method' value='{}'>\
-        <input type='hidden' name='state' value='{}'>\
-        <label>Password<input type='password' name='password' autocomplete='current-password' required></label>\
-        <button type='submit'>Authorize</button>\
-        </form></body></html>",
-        html_escape(client_id),
-        html_escape(redirect_uri),
-        html_escape(client_id),
-        html_escape(redirect_uri),
-        html_escape(code_challenge),
-        html_escape(code_challenge_method),
-        html_escape(state),
-    )
-}
-
-fn html_escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('\"', "&quot;")
-        .replace('\'', "&#39;")
-}
-
 fn urlencoding_encode(value: &str) -> String {
     value
         .bytes()
@@ -458,21 +337,20 @@ mod tests {
             "https://lb.example.com".into(),
             "chatgpt-client-test".into(),
             None,
-            "test-password".into(),
             "token-signing-secret".into(),
         );
         let verifier = "dBjftJeZ4CVP-mB92Kpru-AEJvkQlLgi3ThpmQ45N_Xyo";
         let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
         let redirect_uri = "https://chatgpt.com/connector/oauth/test";
-        let redirect = authorize_post(
+        let redirect = authorize_get(
             &oauth,
-            AuthorizeForm {
+            AuthorizeParams {
+                response_type: "code".into(),
                 client_id: "chatgpt-client-test".into(),
                 redirect_uri: redirect_uri.into(),
                 code_challenge: challenge,
                 code_challenge_method: "S256".into(),
                 state: "state".into(),
-                password: "test-password".into(),
             },
             "https://lb.example.com",
         );

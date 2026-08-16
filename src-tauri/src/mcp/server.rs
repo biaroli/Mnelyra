@@ -23,7 +23,21 @@ pub fn handle_request(state: &SharedState, body: &Value) -> Value {
         "initialize" => Ok(initialize_result()),
         "ping" => Ok(serde_json::json!({})),
         "tools/list" => {
-            let tools = list_tools_for_profile(&state.tool_profile);
+            let mut tools = list_tools_for_profile(&state.tool_profile);
+            tools.retain(|tool| {
+                tool.get("name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|name| {
+                        crate::tools::policy::ceiling_allows_tool(
+                            &state.policy.permission_ceiling,
+                            name,
+                        )
+                    })
+            });
+            tools.extend(codex_control_tools().into_iter().filter(|tool| {
+                state.policy.permission_ceiling != "read_only"
+                    || tool["annotations"]["readOnlyHint"] == Value::Bool(true)
+            }));
             Ok(serde_json::json!({ "tools": tools }))
         }
         "tools/call" => handle_tools_call(state, &params),
@@ -39,6 +53,142 @@ pub fn handle_request(state: &SharedState, body: &Value) -> Value {
     }
 }
 
+fn codex_control_tools() -> Vec<Value> {
+    vec![
+        mcp_tool(
+            "codex_start_task",
+            "Start Codex task",
+            "Start a Mnelyra-managed native Codex task bound to the active workspace.",
+            serde_json::json!({
+                "type": "object",
+                "required": ["title", "prompt"],
+                "properties": {
+                    "title": { "type": "string", "minLength": 1 },
+                    "prompt": { "type": "string", "minLength": 1 }
+                },
+                "additionalProperties": false
+            }),
+            false,
+        ),
+        mcp_tool(
+            "codex_list_sessions",
+            "List Codex sessions",
+            "List Mnelyra Codex sessions bound to the active workspace.",
+            serde_json::json!({ "type": "object", "properties": {}, "additionalProperties": false }),
+            true,
+        ),
+        mcp_tool(
+            "codex_send_input",
+            "Send Codex input",
+            "Continue a Mnelyra Codex session with additional input.",
+            session_string_schema("input"),
+            false,
+        ),
+        mcp_tool(
+            "codex_cancel_session",
+            "Cancel Codex session",
+            "Interrupt the active turn for a Mnelyra Codex session.",
+            session_only_schema(),
+            false,
+        ),
+        mcp_tool(
+            "codex_compact_session",
+            "Compact Codex session",
+            "Manually compact an idle Mnelyra Codex session. Use only as a recovery/maintenance action; native automatic compaction remains the default.",
+            session_only_schema(),
+            false,
+        ),
+        mcp_tool(
+            "codex_session_events",
+            "Read Codex session events",
+            "Read incremental Mnelyra Codex session events using a revision cursor.",
+            serde_json::json!({
+                "type": "object",
+                "required": ["session_id"],
+                "properties": {
+                    "session_id": { "type": "string", "minLength": 1 },
+                    "cursor": { "type": "integer", "minimum": 0, "default": 0 },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 240, "default": 160 }
+                },
+                "additionalProperties": false
+            }),
+            true,
+        ),
+        mcp_tool(
+            "codex_pending_requests",
+            "Read Codex approvals",
+            "List pending Codex approval/input requests for a Mnelyra session.",
+            session_only_schema(),
+            true,
+        ),
+        mcp_tool(
+            "codex_respond_request",
+            "Respond to Codex approval",
+            "Respond to a pending Codex approval or input request.",
+            serde_json::json!({
+                "type": "object",
+                "required": ["session_id", "request_id", "action"],
+                "properties": {
+                    "session_id": { "type": "string", "minLength": 1 },
+                    "request_id": { "type": "string", "minLength": 1 },
+                    "action": { "type": "string", "minLength": 1 }
+                },
+                "additionalProperties": false
+            }),
+            false,
+        ),
+    ]
+}
+
+fn mcp_tool(
+    name: &str,
+    title: &str,
+    description: &str,
+    input_schema: Value,
+    read_only: bool,
+) -> Value {
+    serde_json::json!({
+        "name": name,
+        "title": title,
+        "description": description,
+        "inputSchema": input_schema,
+        "annotations": {
+            "title": title,
+            "readOnlyHint": read_only,
+            "destructiveHint": false,
+            "idempotentHint": read_only,
+            "openWorldHint": false
+        }
+    })
+}
+
+fn session_only_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "required": ["session_id"],
+        "properties": { "session_id": { "type": "string", "minLength": 1 } },
+        "additionalProperties": false
+    })
+}
+
+fn session_string_schema(field: &str) -> Value {
+    let mut properties = serde_json::Map::new();
+    properties.insert(
+        "session_id".into(),
+        serde_json::json!({ "type": "string", "minLength": 1 }),
+    );
+    properties.insert(
+        field.to_string(),
+        serde_json::json!({ "type": "string", "minLength": 1 }),
+    );
+    serde_json::json!({
+        "type": "object",
+        "required": ["session_id", field],
+        "properties": properties,
+        "additionalProperties": false
+    })
+}
+
 fn initialize_result() -> Value {
     serde_json::json!({
         "protocolVersion": "2025-06-18",
@@ -47,8 +197,8 @@ fn initialize_result() -> Value {
             "logging": {}
         },
         "serverInfo": {
-            "name": "rootrelay",
-            "title": "RootRelay",
+            "name": "mnelyra",
+            "title": "Mnelyra",
             "version": env!("CARGO_PKG_VERSION")
         },
         "instructions": "Use these tools only for local coding operations inside the configured workspace. At the start of every new client conversation, before answering the user's first request, call history_session_bootstrap exactly once and pass the user's verbatim first request as initial_user_input. Treat bootstrap as required conversation initialization: it creates or resumes a lossless Markdown archive and returns bounded current state, not all history. Use history_session_search followed by history_session_read only when exact earlier context is needed. history_session_read returns a bounded UTF-8-safe page; follow next_cursor with the returned content hash until the relevant archive is complete. Repeated successful bootstrap calls in the same conversation resume the same session and must not create duplicates. Preserve session_key and current_path returned by bootstrap, then pass them unchanged as session_key and expected_path to every history_session_checkpoint call. After completing each user-requested task in the conversation, call history_session_checkpoint before the final response and pass that user's verbatim request as raw_user_input. Only state that progress was saved after checkpoint returns ok=true with the same session_key and path. The server cannot access client transcript text that was not provided as a tool argument; persistence is not automatic background persistence."
@@ -100,17 +250,21 @@ fn tool_arguments(name: &str, params: &Value) -> Value {
 
 pub fn new_state(
     workspace: Workspace,
+    workspace_id: String,
+    activity: crate::activity::ActivityCoordinator,
     auth: AuthConfig,
     policy: crate::tools::policy::PolicySettings,
     tool_profile: String,
     permission_mode: String,
 ) -> SharedState {
-    Arc::new(ToolContext::from_workspace(
+    Arc::new(ToolContext::from_workspace_scoped(
         workspace,
         auth,
         policy,
         tool_profile,
         permission_mode,
+        workspace_id,
+        activity,
     ))
 }
 
@@ -119,11 +273,11 @@ mod tests {
     use std::fs;
     use std::sync::Arc;
 
-    use serde_json::json;
+    use serde_json::{json, Value};
 
     use crate::tools::ToolContext;
 
-    use super::{handle_request, initialize_result, tool_arguments};
+    use super::{codex_control_tools, handle_request, initialize_result, tool_arguments};
 
     #[test]
     fn initialize_instructions_define_the_history_persistence_workflow() {
@@ -153,6 +307,34 @@ mod tests {
         let initialized = initialize_result();
 
         assert_eq!(initialized["capabilities"]["tools"]["listChanged"], false);
+    }
+
+    #[test]
+    fn codex_control_catalog_is_stable_for_remote_clients() {
+        let tools = codex_control_tools();
+        let names = tools
+            .iter()
+            .filter_map(|tool| tool.get("name").and_then(Value::as_str))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            names,
+            vec![
+                "codex_start_task",
+                "codex_list_sessions",
+                "codex_send_input",
+                "codex_cancel_session",
+                "codex_compact_session",
+                "codex_session_events",
+                "codex_pending_requests",
+                "codex_respond_request",
+            ]
+        );
+        let send = tools
+            .iter()
+            .find(|tool| tool["name"] == "codex_send_input")
+            .expect("send tool");
+        assert!(send["inputSchema"]["properties"].get("input").is_some());
+        assert!(send["inputSchema"]["properties"].get("field").is_none());
     }
 
     #[test]

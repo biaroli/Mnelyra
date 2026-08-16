@@ -11,11 +11,14 @@
   } from "@lucide/svelte";
   import { openUrl } from "$lib/api/app-info";
   import { RELEASES_LATEST_URL } from "$lib/app-links";
+  import { uiLocale } from "$lib/stores/locale";
   import {
     checkForUpdates,
     installAvailableUpdate,
     updateState,
   } from "$lib/stores/update";
+
+  const zh = $derived($uiLocale === "zh-CN");
 
   function formatBytes(value: number): string {
     if (!Number.isFinite(value) || value <= 0) return "0 B";
@@ -34,7 +37,7 @@
     try {
       await installAvailableUpdate();
     } catch (error) {
-      await message(String(error), { title: "更新失败", kind: "error" });
+      await message(String(error), { title: zh ? "更新失败" : "Update failed", kind: "error" });
     }
   }
 
@@ -42,7 +45,7 @@
     try {
       await openUrl(RELEASES_LATEST_URL);
     } catch (error) {
-      await message(String(error), { title: "无法打开 Releases", kind: "error" });
+      await message(String(error), { title: zh ? "无法打开 Releases" : "Could not open Releases", kind: "error" });
     }
   }
 
@@ -55,10 +58,10 @@
 
 <section class="page-scroll">
   <header class="page-header">
-    <p class="page-kicker">RELEASE CHANNEL</p>
-    <h2 class="page-title">更新</h2>
+    <p class="page-kicker">{zh ? "发布通道" : "RELEASE CHANNEL"}</p>
+    <h2 class="page-title">{zh ? "更新" : "Updates"}</h2>
     <p class="mt-2 max-w-2xl text-sm text-[var(--color-text-muted)]">
-      RootRelay 直接从 GitHub Releases 获取签名更新包。发现新版后可在这里完成下载、安装与重启。
+      {zh ? "从 GitHub Releases 获取签名更新包，并在验证后完成安装。" : "Fetch signed builds from GitHub Releases and install them after verification."}
     </p>
   </header>
 
@@ -67,13 +70,13 @@
       <div class="flex flex-wrap items-start justify-between gap-4 p-5">
         <div>
           <p class="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-text-muted)]">
-            Current build
+            {zh ? "当前版本" : "Current build"}
           </p>
           <div class="mt-2 flex items-baseline gap-3">
             <strong class="font-mono text-2xl font-semibold">v{$updateState.currentVersion}</strong>
             {#if $updateState.phase === "up-to-date"}
               <span class="inline-flex items-center gap-1 text-xs text-emerald-400">
-                <CheckCircle2 size={13} /> 已是最新
+                <CheckCircle2 size={13} /> {zh ? "已是最新" : "Up to date"}
               </span>
             {:else if $updateState.phase === "available" && $updateState.latestVersion}
               <span class="text-xs text-[var(--color-accent)]">
@@ -93,7 +96,7 @@
             size={14}
             class={$updateState.phase === "checking" ? "animate-spin" : ""}
           />
-          {$updateState.phase === "checking" ? "检查中…" : "重新检查"}
+          {$updateState.phase === "checking" ? (zh ? "检查中…" : "Checking…") : (zh ? "重新检查" : "Check again")}
         </button>
       </div>
 
@@ -101,9 +104,9 @@
         <div class="border-t border-[var(--color-border)] bg-[color-mix(in_srgb,var(--color-accent)_4%,transparent)] p-5">
           <div class="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p class="text-sm font-semibold">发现新版本 v{$updateState.latestVersion}</p>
+              <p class="text-sm font-semibold">{zh ? "发现新版本" : "New version available"} v{$updateState.latestVersion}</p>
               <p class="mt-1 text-xs text-[var(--color-text-muted)]">
-                更新包会先通过应用内置公钥验证签名，再执行安装。
+                {zh ? "更新包会先通过应用内置公钥验证签名，再执行安装。" : "The package signature is verified with the embedded public key before installation."}
               </p>
             </div>
             <button
@@ -112,7 +115,7 @@
               onclick={() => void installUpdate()}
             >
               <Download size={15} />
-              立即更新
+              {zh ? "立即更新" : "Install update"}
             </button>
           </div>
         </div>
@@ -120,7 +123,9 @@
         <div class="border-t border-[var(--color-border)] p-5">
           <div class="flex items-center justify-between gap-4 text-sm">
             <span class="font-medium">
-              {$updateState.phase === "installing" ? "正在安装，随后自动重启…" : "正在下载更新…"}
+              {$updateState.phase === "installing"
+                ? (zh ? "正在安装，随后自动重启…" : "Installing, then restarting…")
+                : (zh ? "正在下载更新…" : "Downloading update…")}
             </span>
             {#if progressPercent() !== null}
               <span class="font-mono text-xs text-[var(--color-text-muted)]">{progressPercent()}%</span>
@@ -143,7 +148,7 @@
         <div class="flex items-start gap-3 border-t border-[var(--color-border)] p-5">
           <CircleAlert class="mt-0.5 shrink-0 text-amber-400" size={17} />
           <div class="min-w-0">
-            <p class="text-sm font-medium">暂时无法检查更新</p>
+            <p class="text-sm font-medium">{zh ? "暂时无法检查更新" : "Update check unavailable"}</p>
             <p class="mt-1 break-words text-xs text-[var(--color-text-muted)]">{$updateState.error}</p>
           </div>
         </div>
@@ -152,7 +157,7 @@
 
     {#if $updateState.phase === "available" && $updateState.notes}
       <div class="tx-card p-5">
-        <p class="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-text-muted)]">Release notes</p>
+        <p class="text-xs font-medium uppercase tracking-[0.16em] text-[var(--color-text-muted)]">{zh ? "更新说明" : "Release notes"}</p>
         <pre class="mt-3 whitespace-pre-wrap break-words font-sans text-sm leading-6 text-[var(--color-text)]">{$updateState.notes}</pre>
       </div>
     {/if}
@@ -161,15 +166,15 @@
       <div class="flex min-w-0 items-start gap-3">
         <ShieldCheck class="mt-0.5 shrink-0 text-[var(--color-accent)]" size={17} />
         <div>
-          <p class="text-sm font-medium">GitHub Release + 签名 OTA</p>
+          <p class="text-sm font-medium">GitHub Releases · {zh ? "签名更新" : "signed updates"}</p>
           <p class="mt-1 text-xs text-[var(--color-text-muted)]">
-            如果自动更新不可用，仍可直接打开 Releases 下载完整安装包。
+            {zh ? "如果自动更新不可用，可直接打开 Releases 下载完整安装包。" : "If in-app updating is unavailable, download the full installer from Releases."}
           </p>
         </div>
       </div>
       <button type="button" class="tx-btn-ghost inline-flex items-center gap-2" onclick={() => void openReleases()}>
         <ExternalLink size={14} />
-        打开 Releases
+        {zh ? "打开 Releases" : "Open Releases"}
       </button>
     </div>
   </div>

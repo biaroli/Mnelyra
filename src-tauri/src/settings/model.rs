@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::data::AppData;
-use crate::workspace::{ActionsConfig, RuntimeConfig, TunnelConfig, WorkspaceProfile};
+use crate::workspace::{RuntimeConfig, TunnelConfig, WorkspaceProfile};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FrpProfile {
@@ -14,24 +14,42 @@ pub struct FrpProfile {
     pub server_port: u16,
 }
 
+fn default_openai_tunnel_alias() -> String {
+    "mnelyra".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenAiConnectorConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub tunnel_id: String,
+    #[serde(default = "default_openai_tunnel_alias")]
+    pub alias: String,
+}
+
+impl Default for OpenAiConnectorConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            tunnel_id: String::new(),
+            alias: default_openai_tunnel_alias(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GlobalAuthConfig {
     #[serde(default = "default_mcp_auth_type")]
     pub mcp_auth_type: String,
-    #[serde(default = "default_actions_auth_type")]
-    pub actions_auth_type: String,
-    #[serde(default)]
-    pub actions_oauth_scopes: String,
 }
 
 impl Default for GlobalAuthConfig {
     fn default() -> Self {
         Self {
             mcp_auth_type: default_mcp_auth_type(),
-            actions_auth_type: default_actions_auth_type(),
-            actions_oauth_scopes: String::new(),
         }
     }
 }
@@ -40,8 +58,6 @@ impl GlobalAuthConfig {
     pub(crate) fn from_profile(profile: &WorkspaceProfile) -> Self {
         Self {
             mcp_auth_type: profile.auth.auth_type.clone(),
-            actions_auth_type: profile.actions.auth_type.clone(),
-            actions_oauth_scopes: profile.actions.oauth_scopes.clone(),
         }
     }
 }
@@ -51,21 +67,21 @@ impl GlobalAuthConfig {
 pub struct GlobalGeneralConfig {
     #[serde(default)]
     pub configured: bool,
+    #[serde(default = "default_permission_ceiling", alias = "codexPermissionMode")]
+    pub permission_ceiling: String,
     #[serde(default)]
     pub mcp_tunnel: TunnelConfig,
     #[serde(default)]
     pub mcp_runtime: RuntimeConfig,
-    #[serde(default)]
-    pub actions: ActionsConfig,
 }
 
 impl GlobalGeneralConfig {
     pub(crate) fn from_profile(profile: &WorkspaceProfile) -> Self {
         Self {
             configured: true,
+            permission_ceiling: default_permission_ceiling(),
             mcp_tunnel: profile.tunnel.clone(),
             mcp_runtime: profile.runtime.clone(),
-            actions: profile.actions.clone(),
         }
     }
 }
@@ -106,6 +122,9 @@ pub struct AppSettings {
     /// Global service, tunnel and policy settings. Workspace copies are legacy only.
     #[serde(default)]
     pub general: GlobalGeneralConfig,
+    /// Optional OpenAI Secure MCP Tunnel connector. Runtime/API keys remain in app_secrets.
+    #[serde(default)]
+    pub openai_connector: OpenAiConnectorConfig,
     /// Shared secrets indexed by key name (e.g. "bearer_token").
     /// Persisted alongside other app settings in app_settings.json.
     #[serde(default)]
@@ -130,8 +149,8 @@ fn default_mcp_auth_type() -> String {
     "oauth".to_string()
 }
 
-fn default_actions_auth_type() -> String {
-    "api_key".to_string()
+fn default_permission_ceiling() -> String {
+    "automatic".to_string()
 }
 
 impl AppSettings {
@@ -144,19 +163,11 @@ impl AppSettings {
         if let Some(client_id) = self.shared_secrets.get("oauth_client_id") {
             profile.auth.oauth_client_id = client_id.clone();
         }
-
-        profile.actions.auth_type = self.auth.actions_auth_type.clone();
-        profile.actions.oauth_scopes = self.auth.actions_oauth_scopes.clone();
-        profile.actions.use_shared_secrets = true;
-        if let Some(client_id) = self.shared_secrets.get("actions_oauth_client_id") {
-            profile.actions.oauth_client_id = client_id.clone();
-        }
     }
 
     pub fn apply_global_config(&self, profile: &mut WorkspaceProfile) {
         profile.tunnel = self.general.mcp_tunnel.clone();
         profile.runtime = self.general.mcp_runtime.clone();
-        profile.actions = self.general.actions.clone();
         self.apply_global_auth(profile);
     }
 
@@ -167,6 +178,7 @@ impl AppSettings {
             download: data.download.clone(),
             auth: data.auth.clone(),
             general: data.general.clone(),
+            openai_connector: data.openai_connector.clone(),
             shared_secrets: data.shared_secrets.clone(),
             workspace_secrets: data.workspace_secrets.clone(),
             app_secrets: data.app_secrets.clone(),
@@ -179,14 +191,14 @@ impl AppSettings {
         data.download = self.download.clone();
         data.auth = self.auth.clone();
         data.general = self.general.clone();
+        data.openai_connector = self.openai_connector.clone();
         data.shared_secrets = self.shared_secrets.clone();
         data.workspace_secrets = self.workspace_secrets.clone();
         data.app_secrets = self.app_secrets.clone();
     }
 
     pub fn load_or_default() -> Self {
-        crate::data::DataStore::read_file(|data| Ok(Self::from_data(data)))
-            .unwrap_or_default()
+        crate::data::DataStore::read_file(|data| Ok(Self::from_data(data))).unwrap_or_default()
     }
 
     pub fn find_frp_profile(&self, id: &str) -> Option<&FrpProfile> {

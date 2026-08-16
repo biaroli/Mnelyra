@@ -42,7 +42,7 @@ fn bootstrap_prefers_host_session_and_preserves_initial_input() {
     let boot = assert_ok(&boot);
     assert_eq!(boot["session_key"], "chatgpt-session");
     assert_eq!(boot["session_key_source"], "platform_conversation_id");
-    assert_eq!(boot["current_path"], "docs/history-session/1.md");
+    assert_eq!(boot["current_path"], ".rootrelay/history-session/1.md");
     assert_eq!(boot["initial_input_captured"], true);
     assert!(boot.get("all_history_summary").is_none());
     assert!(boot.get("latest_handoff").is_none());
@@ -56,17 +56,17 @@ fn bootstrap_prefers_host_session_and_preserves_initial_input() {
         .unwrap_or("")
         .contains("raw_user_input"));
 
-    let archive = fs::read_to_string(workspace.path().join("docs/history-session/1.md"))
+    let archive = fs::read_to_string(workspace.path().join(".rootrelay/history-session/1.md"))
         .expect("read archive");
     assert!(archive.contains(first_request));
     assert!(!archive.contains("继承的历史摘要"));
     assert!(workspace
         .path()
-        .join("docs/history-session/memory/state.json")
+        .join(".rootrelay/history-session/memory/state.json")
         .is_file());
     assert!(workspace
         .path()
-        .join("docs/history-session/memory/manifest.json")
+        .join(".rootrelay/history-session/memory/manifest.json")
         .is_file());
 }
 
@@ -103,7 +103,7 @@ fn bootstrap_retry_keeps_old_initial_input_and_appends_a_revision() {
         json!({"session_key": "initial-revision", "initial_user_input": "补充后的首轮请求"}),
     );
     assert_eq!(retry["current_number"], 1);
-    let archive = fs::read_to_string(workspace.path().join("docs/history-session/1.md"))
+    let archive = fs::read_to_string(workspace.path().join(".rootrelay/history-session/1.md"))
         .expect("read archive");
     assert!(archive.contains("原始首轮请求"));
     assert!(archive.contains("补充后的首轮请求"));
@@ -144,7 +144,7 @@ fn checkpoint_preserves_raw_input_and_superseding_revision_evidence() {
     assert_eq!(revision["revision"], 2);
     assert_eq!(revision["supersedes"], "turn-0001 revision-1");
 
-    let archive = fs::read_to_string(workspace.path().join("docs/history-session/1.md"))
+    let archive = fs::read_to_string(workspace.path().join(".rootrelay/history-session/1.md"))
         .expect("read checkpoint archive");
     assert!(archive.contains("[REDACTED]"));
     assert!(!archive.contains("hunter2"));
@@ -191,7 +191,7 @@ fn search_and_read_return_precise_lossless_archive_pages() {
     assert_eq!(search["total_matches"], 1);
     let hit = &search["results"][0];
     assert_eq!(hit["number"], 2);
-    assert_eq!(hit["path"], "docs/history-session/2.md");
+    assert_eq!(hit["path"], ".rootrelay/history-session/2.md");
     assert!(hit["snippet"].as_str().unwrap_or("").contains("精确记忆"));
 
     let first_page = invoke_ok(
@@ -215,7 +215,7 @@ fn search_and_read_return_precise_lossless_archive_pages() {
         first_page["content"].as_str().unwrap_or(""),
         second_page["content"].as_str().unwrap_or("")
     );
-    let original = fs::read_to_string(workspace.path().join("docs/history-session/2.md"))
+    let original = fs::read_to_string(workspace.path().join(".rootrelay/history-session/2.md"))
         .expect("read original");
     assert_eq!(reconstructed, original);
     assert_eq!(second_page["next_cursor"], Value::Null);
@@ -223,7 +223,7 @@ fn search_and_read_return_precise_lossless_archive_pages() {
         assert_err(&invoke(
             &ctx,
             "history_session_read",
-            json!({"path": "docs/history-session/README.md"}),
+            json!({"path": ".rootrelay/history-session/README.md"}),
         ))["error"]["code"],
         "HISTORY_READ_NOT_FOUND"
     );
@@ -232,7 +232,7 @@ fn search_and_read_return_precise_lossless_archive_pages() {
 #[test]
 fn read_without_max_bytes_uses_bounded_lossless_pages() {
     let (workspace, _harness, ctx) = test_context();
-    let dir = workspace.path().join("docs/history-session");
+    let dir = workspace.path().join(".rootrelay/history-session");
     fs::create_dir_all(&dir).expect("create history");
     fs::write(
         dir.join("1.md"),
@@ -287,7 +287,7 @@ fn read_without_max_bytes_uses_bounded_lossless_pages() {
 #[test]
 fn search_snippet_handles_unicode_case_expansion_without_invalid_utf8_slicing() {
     let (workspace, _harness, ctx) = test_context();
-    let dir = workspace.path().join("docs/history-session");
+    let dir = workspace.path().join(".rootrelay/history-session");
     fs::create_dir_all(&dir).expect("create history");
     fs::write(
         dir.join("1.md"),
@@ -317,7 +317,7 @@ fn rebuilds_derived_files_without_changing_existing_archives() {
     assert_eq!(boot["current_number"], 3);
     assert_existing_archives_unchanged(workspace.path(), &before);
 
-    let memory = workspace.path().join("docs/history-session/memory");
+    let memory = workspace.path().join(".rootrelay/history-session/memory");
     fs::remove_file(memory.join("state.json")).expect("remove state");
     fs::write(memory.join("manifest.json"), "{broken-json").expect("break manifest");
     let validate = invoke_ok(&ctx, "history_session_validate", json!({"repair": true}));
@@ -330,7 +330,7 @@ fn rebuilds_derived_files_without_changing_existing_archives() {
 #[test]
 fn bootstrap_response_stays_bounded_for_many_large_archives() {
     let (workspace, _harness, ctx) = test_context();
-    let dir = workspace.path().join("docs/history-session");
+    let dir = workspace.path().join(".rootrelay/history-session");
     fs::create_dir_all(&dir).expect("create history");
     let marker = "x".repeat(80_000);
     for number in 1..=40 {
@@ -364,7 +364,7 @@ fn real_history_fixture_preserves_archives_when_opted_in() {
     assert!(source.is_dir(), "real fixture directory is missing");
 
     let (workspace, _harness, ctx) = test_context();
-    let target = workspace.path().join("docs/history-session");
+    let target = workspace.path().join(".rootrelay/history-session");
     copy_directory(source, &target);
     let before = archive_hashes(workspace.path());
     assert_eq!(before.len(), 40, "expected the 40-archive real fixture");
@@ -597,7 +597,7 @@ fn history_file(number: u64, session_key: &str, marker: &str) -> String {
 }
 
 fn prepare_history(root: &std::path::Path) {
-    let dir = root.join("docs/history-session");
+    let dir = root.join(".rootrelay/history-session");
     fs::create_dir_all(&dir).expect("create history dir");
     fs::write(dir.join("README.md"), "# 历史归档说明\n").expect("write readme");
     fs::write(
@@ -613,7 +613,7 @@ fn prepare_history(root: &std::path::Path) {
 }
 
 fn archive_hashes(root: &std::path::Path) -> BTreeMap<String, String> {
-    let dir = root.join("docs/history-session");
+    let dir = root.join(".rootrelay/history-session");
     fs::read_dir(dir)
         .expect("list archives")
         .filter_map(Result::ok)

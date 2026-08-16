@@ -44,9 +44,9 @@
       aria-labelledby="tx-close-title"
       aria-describedby="tx-close-desc"
     >
-      <h2 id="tx-close-title" class="tx-close-title">关闭 RootRelay?</h2>
+      <h2 id="tx-close-title" class="tx-close-title">关闭 Mnelyra?</h2>
       <p id="tx-close-desc" class="tx-close-desc">
-        选择后台运行可隐藏窗口并保持 MCP、Actions 和隧道服务继续运行，之后可通过系统托盘重新打开。
+        选择后台运行可隐藏窗口并保持 MCP 和隧道服务继续运行，之后可通过系统托盘重新打开。
       </p>
       <div class="tx-close-actions">
         <button

@@ -8,6 +8,7 @@ use tokio::process::{Child, ChildStdin};
 use tokio::sync::Mutex as AsyncMutex;
 use uuid::Uuid;
 
+use crate::activity::ActivityGuard;
 use crate::tools::workspace::{tool_ok, WorkspaceError};
 use serde_json::{json, Value};
 
@@ -69,6 +70,7 @@ pub struct ExecSession {
     exited: AtomicBool,
     termination_reason: Mutex<Option<String>>,
     reader_tasks: AsyncMutex<Vec<tauri::async_runtime::JoinHandle<()>>>,
+    activity_guard: Mutex<Option<ActivityGuard>>,
 }
 
 impl ExecSession {
@@ -76,7 +78,15 @@ impl ExecSession {
         Self::new_with_mode(child, false)
     }
 
-    pub fn new_with_mode(mut child: Child, interactive: bool) -> Self {
+    pub fn new_with_mode(child: Child, interactive: bool) -> Self {
+        Self::new_with_activity(child, interactive, None)
+    }
+
+    pub fn new_with_activity(
+        mut child: Child,
+        interactive: bool,
+        activity_guard: Option<ActivityGuard>,
+    ) -> Self {
         let session_id = Uuid::new_v4().to_string();
         let stdin = child.stdin.take();
         let stdin_open = stdin.is_some();
@@ -95,6 +105,7 @@ impl ExecSession {
             exited: AtomicBool::new(false),
             termination_reason: Mutex::new(None),
             reader_tasks: AsyncMutex::new(Vec::new()),
+            activity_guard: Mutex::new(activity_guard),
         }
     }
 
@@ -177,11 +188,18 @@ impl ExecSession {
 
     fn record_exit_status(&self, status: std::process::ExitStatus) {
         *self.exit_code.lock().expect("exit_code lock") = status.code();
-        self.exited.store(true, Ordering::Release);
+        let first_exit = !self.exited.swap(true, Ordering::AcqRel);
         *self.stdin_open.lock().expect("stdin_open lock") = false;
         let mut reason = self.termination_reason.lock().expect("termination lock");
         if reason.is_none() {
             *reason = Some("exited".into());
+        }
+        drop(reason);
+        if first_exit {
+            self.activity_guard
+                .lock()
+                .expect("activity guard lock")
+                .take();
         }
     }
 

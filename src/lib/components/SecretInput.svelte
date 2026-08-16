@@ -1,5 +1,6 @@
 <script lang="ts">
   import CopyButton from "$lib/components/CopyButton.svelte";
+  import { uiLocale } from "$lib/stores/locale";
 
   interface Props {
     value?: string;
@@ -25,11 +26,9 @@
     size = "md",
   }: Props = $props();
 
-  let visible = $state(true);
+  const zh = $derived($uiLocale === "zh-CN");
 
-  const isLoadingPlaceholder = $derived(value === "加载中…");
-  const canReveal = $derived(!disabled && !isLoadingPlaceholder && value.length > 0);
-  const inputType = $derived(visible ? "text" : "password");
+  const isLoadingPlaceholder = $derived(value === "加载中…" || value === "Loading…");
   const fontClass = $derived(monospace ? "font-mono" : "");
   const textClass = $derived(size === "sm" ? "text-xs" : "text-sm");
 </script>
@@ -38,7 +37,7 @@
   <div class="tx-secret-input min-w-0 flex-1">
     {#if readonly}
       <input
-        type={inputType}
+        type="text"
         class="tx-secret-input-field {fontClass} {textClass}"
         {value}
         {placeholder}
@@ -48,25 +47,13 @@
       />
     {:else}
       <input
-        type={inputType}
+        type="text"
         class="tx-secret-input-field {fontClass} {textClass}"
         bind:value
         {placeholder}
         {disabled}
         autocomplete="off"
       />
-    {/if}
-    {#if canReveal}
-      <button
-        type="button"
-        class="tx-secret-toggle"
-        title={visible ? "隐藏明文" : "显示明文"}
-        onclick={() => {
-          visible = !visible;
-        }}
-      >
-        {visible ? "隐藏" : "显示"}
-      </button>
     {/if}
   </div>
   {#if showCopy && value && !isLoadingPlaceholder}
@@ -79,7 +66,7 @@
       disabled={regenerating || disabled}
       onclick={() => onRegenerate?.()}
     >
-      {regenerating ? "生成中…" : "重新生成"}
+      {regenerating ? (zh ? "生成中…" : "Generating…") : (zh ? "重新生成" : "Regenerate")}
     </button>
   {/if}
 </div>

@@ -10,16 +10,20 @@ use serde_json::{json, Value};
 use tokio::sync::oneshot;
 use tower_http::cors::CorsLayer;
 
+use crate::activity::ActivityCoordinator;
 use crate::auth::{
-    authorization_server_metadata, authorize_get, authorize_post, external_base_url,
-    protected_resource_metadata, token_exchange, verify_bearer_header, verify_oauth_bearer_header,
-    AuthorizeForm, AuthorizeParams, OAuthRuntime, TokenForm,
+    authorization_server_metadata, authorize_get, external_base_url, protected_resource_metadata,
+    token_exchange, verify_bearer_header, verify_oauth_bearer_header, AuthorizeParams,
+    OAuthRuntime, TokenForm,
 };
 use crate::mcp::server::{handle_request, new_state, SharedState};
+use crate::mcp::{TUNNEL_MCP_SECRET_KEY, TUNNEL_SECRET_SCOPE, TUNNEL_TOKEN_HEADER};
 use crate::secret::SecretStore;
+use crate::session::SessionCoordinator;
+use crate::tools::policy::PolicySettings;
+use crate::tools::wrap_mcp_tool_result;
 use crate::tools::Workspace;
 use crate::tunnel::append_profile_log;
-use crate::tools::policy::PolicySettings;
 use crate::workspace::{AuthConfig, RuntimeConfig};
 
 pub type ShutdownSender = oneshot::Sender<()>;
@@ -27,6 +31,7 @@ pub type ShutdownSender = oneshot::Sender<()>;
 #[derive(Clone)]
 struct ListenerState {
     mcp: SharedState,
+    sessions: SessionCoordinator,
     auth: AuthConfig,
     workspace_id: String,
     workspace_path: String,
@@ -37,6 +42,196 @@ struct ListenerState {
     oauth_client_secret: Option<String>,
 }
 
+fn is_codex_control_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "codex_start_task"
+            | "codex_list_sessions"
+            | "codex_send_input"
+            | "codex_cancel_session"
+            | "codex_compact_session"
+            | "codex_session_events"
+            | "codex_pending_requests"
+            | "codex_respond_request"
+    )
+}
+
+fn is_read_only_codex_control_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "codex_list_sessions" | "codex_session_events" | "codex_pending_requests"
+    )
+}
+
+async fn handle_codex_tool(state: &ListenerState, body: &Value) -> Value {
+    let id = body.get("id").cloned().unwrap_or(Value::Null);
+    let params = body.get("params").cloned().unwrap_or(Value::Null);
+    let name = params.get("name").and_then(Value::as_str).unwrap_or("");
+    let args = params
+        .get("arguments")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+
+    if state.mcp.policy.permission_ceiling == "read_only" && !is_read_only_codex_control_tool(name)
+    {
+        let structured = json!({
+            "ok": false,
+            "status": "error",
+            "summary": format!("{name} is blocked by the Mnelyra read-only ceiling"),
+            "error": {
+                "code": "MASTER_PERMISSION_READ_ONLY",
+                "message": format!("{name} is blocked by the Mnelyra read-only ceiling"),
+                "category": "permission",
+                "retryable": false,
+                "details": { "permission_ceiling": "read_only" }
+            }
+        });
+        return json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": wrap_mcp_tool_result(name, &args, structured)
+        });
+    }
+
+    let structured = match call_codex_tool(state, name, &args).await {
+        Ok(value) => value,
+        Err(message) => json!({
+            "ok": false,
+            "status": "error",
+            "summary": message,
+            "error": {
+                "code": "CODEX_CONTROL_FAILED",
+                "message": message,
+                "category": "provider",
+                "retryable": true,
+                "details": {}
+            }
+        }),
+    };
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "result": wrap_mcp_tool_result(name, &args, structured)
+    })
+}
+
+async fn call_codex_tool(state: &ListenerState, name: &str, args: &Value) -> Result<Value, String> {
+    match name {
+        "codex_start_task" => {
+            let title = required_string(args, "title")?;
+            let prompt = required_string(args, "prompt")?;
+            let session = state
+                .sessions
+                .start_codex_task(
+                    &state.workspace_id,
+                    &PathBuf::from(&state.workspace_path),
+                    &title,
+                    &prompt,
+                )
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(json!({ "ok": true, "session": session }))
+        }
+        "codex_compact_session" => {
+            let session_id = required_string(args, "session_id")?;
+            ensure_session_workspace(state, &session_id)?;
+            let session = state
+                .sessions
+                .compact(&session_id)
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(json!({ "ok": true, "session": session }))
+        }
+        "codex_list_sessions" => {
+            let mut sessions = state
+                .sessions
+                .list_sessions()
+                .map_err(|error| error.to_string())?;
+            sessions.retain(|session| session.workspace_id == state.workspace_id);
+            Ok(json!({ "ok": true, "sessions": sessions }))
+        }
+        "codex_send_input" => {
+            let session_id = required_string(args, "session_id")?;
+            ensure_session_workspace(state, &session_id)?;
+            let input = required_string(args, "input")?;
+            let session = state
+                .sessions
+                .send_input(&session_id, &input)
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(json!({ "ok": true, "session": session }))
+        }
+        "codex_cancel_session" => {
+            let session_id = required_string(args, "session_id")?;
+            ensure_session_workspace(state, &session_id)?;
+            let session = state
+                .sessions
+                .cancel(&session_id)
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(json!({ "ok": true, "session": session }))
+        }
+        "codex_session_events" => {
+            let session_id = required_string(args, "session_id")?;
+            ensure_session_workspace(state, &session_id)?;
+            let cursor = args.get("cursor").and_then(Value::as_u64).unwrap_or(0);
+            let limit = args
+                .get("limit")
+                .and_then(Value::as_u64)
+                .and_then(|value| usize::try_from(value).ok());
+            let page = state
+                .sessions
+                .event_page(&session_id, cursor, limit)
+                .map_err(|error| error.to_string())?;
+            Ok(json!({ "ok": true, "page": page }))
+        }
+        "codex_pending_requests" => {
+            let session_id = required_string(args, "session_id")?;
+            ensure_session_workspace(state, &session_id)?;
+            let requests = state
+                .sessions
+                .pending_requests(&session_id)
+                .map_err(|error| error.to_string())?;
+            Ok(json!({ "ok": true, "requests": requests }))
+        }
+        "codex_respond_request" => {
+            let session_id = required_string(args, "session_id")?;
+            ensure_session_workspace(state, &session_id)?;
+            let request_id = required_string(args, "request_id")?;
+            let action = required_string(args, "action")?;
+            state
+                .sessions
+                .respond_to_request(&session_id, &request_id, &action)
+                .await
+                .map_err(|error| error.to_string())?;
+            Ok(json!({ "ok": true }))
+        }
+        _ => Err(format!("unknown Codex control tool: {name}")),
+    }
+}
+
+fn required_string(args: &Value, key: &str) -> Result<String, String> {
+    args.get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .ok_or_else(|| format!("missing required field: {key}"))
+}
+
+fn ensure_session_workspace(state: &ListenerState, session_id: &str) -> Result<(), String> {
+    let session = state
+        .sessions
+        .get_session(session_id)
+        .map_err(|error| error.to_string())?;
+    if session.workspace_id != state.workspace_id {
+        return Err(format!(
+            "session {session_id} belongs to a different workspace"
+        ));
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn spawn_listener(
     port: u16,
@@ -45,15 +240,20 @@ pub fn spawn_listener(
     auth: AuthConfig,
     public_base_url: String,
     oauth_client_secret: Option<String>,
-    oauth_password: Option<String>,
     oauth_token_secret: Option<String>,
     runtime: RuntimeConfig,
+    permission_ceiling: String,
+    activity: ActivityCoordinator,
+    sessions: SessionCoordinator,
 ) -> Result<(ShutdownSender, tauri::async_runtime::JoinHandle<()>), String> {
     let workspace_display = workspace_path.display().to_string();
     let workspace = Workspace::new(workspace_path).map_err(|e| e.message())?;
-    let policy = PolicySettings::from_runtime(&runtime);
+    let policy =
+        PolicySettings::from_runtime(&runtime).with_permission_ceiling(&permission_ceiling);
     let mcp = new_state(
         workspace,
+        workspace_id.clone(),
+        activity,
         auth.clone(),
         policy,
         runtime.tool_profile.clone(),
@@ -71,18 +271,12 @@ pub fn spawn_listener(
     };
     let configured_public_url = public_base_url.trim().to_string();
     let oauth = if auth.oauth_enabled() {
-        let password = oauth_password.unwrap_or_default();
         let token_secret = oauth_token_secret.unwrap_or_default();
-        let oauth_base = external_base_url(
-            &HeaderMap::new(),
-            port,
-            &configured_public_url,
-        );
+        let oauth_base = external_base_url(&HeaderMap::new(), port, &configured_public_url);
         Some(Arc::new(OAuthRuntime::new(
             oauth_base,
             auth.oauth_client_id.clone(),
             oauth_client_secret.clone(),
-            password,
             token_secret,
         )))
     } else {
@@ -90,6 +284,7 @@ pub fn spawn_listener(
     };
     let state = ListenerState {
         mcp,
+        sessions,
         auth,
         workspace_id,
         workspace_path: workspace_display,
@@ -136,7 +331,7 @@ async fn serve(
             "/.well-known/oauth-protected-resource",
             get(oauth_protected_resource_metadata),
         )
-        .route("/oauth/authorize", get(oauth_authorize_get).post(oauth_authorize_post))
+        .route("/oauth/authorize", get(oauth_authorize_get))
         .route("/oauth/token", post(oauth_token_post))
         .with_state(state)
         .layer(CorsLayer::permissive());
@@ -171,7 +366,7 @@ async fn mcp_discovery() -> Response {
 
 fn mcp_discovery_payload() -> Value {
     json!({
-        "name": "rootrelay",
+        "name": "mnelyra",
         "version": env!("CARGO_PKG_VERSION"),
         "protocolVersion": "2025-06-18"
     })
@@ -210,15 +405,48 @@ async fn mcp_post(
         ),
     );
 
+    let _activity_guard = if method == "tools/call" {
+        match state
+            .mcp
+            .acquire_activity(crate::activity::ActivityKind::McpRequest)
+        {
+            Ok(guard) => guard,
+            Err(error) => {
+                return Json(json!({
+                    "jsonrpc": "2.0",
+                    "id": request_id,
+                    "error": {
+                        "code": -32002,
+                        "message": error.message(),
+                        "data": {
+                            "reason": "workspace_draining",
+                            "retryable": true
+                        }
+                    }
+                }))
+                .into_response();
+            }
+        }
+    } else {
+        None
+    };
+
     let mcp = state.mcp.clone();
     let profile_id = state.workspace_id.clone();
-    let result = tokio::task::spawn_blocking(move || handle_request(&mcp, &body)).await;
+    let result = if method == "tools/call" && is_codex_control_tool(&tool_name) {
+        Ok(handle_codex_tool(&state, &body).await)
+    } else {
+        tokio::task::spawn_blocking(move || handle_request(&mcp, &body)).await
+    };
     match result {
         Ok(response) => {
             append_profile_log(
                 &profile_id,
                 "mcp-requests.log",
-                &format!("[rpc] completed id={} method={} tool={}", request_id, method, tool_name),
+                &format!(
+                    "[rpc] completed id={} method={} tool={}",
+                    request_id, method, tool_name
+                ),
             );
             if tool_name == "exec_command" || tool_name == "exec_health_check" {
                 let structured = response
@@ -281,6 +509,9 @@ async fn mcp_post(
 }
 
 fn require_mcp_auth(state: &ListenerState, headers: &HeaderMap) -> Option<Response> {
+    if tunnel_client_authorized(headers) {
+        return None;
+    }
     if state.auth.bearer_enabled() {
         let expected = state.bearer_token.as_deref().unwrap_or("");
         return verify_bearer_header(headers, expected);
@@ -292,6 +523,31 @@ fn require_mcp_auth(state: &ListenerState, headers: &HeaderMap) -> Option<Respon
         }
     }
     None
+}
+
+fn tunnel_client_authorized(headers: &HeaderMap) -> bool {
+    let Some(provided) = headers
+        .get(TUNNEL_TOKEN_HEADER)
+        .and_then(|value| value.to_str().ok())
+    else {
+        return false;
+    };
+    let Ok(Some(expected)) = SecretStore::get_app(TUNNEL_SECRET_SCOPE, TUNNEL_MCP_SECRET_KEY)
+    else {
+        return false;
+    };
+    constant_time_eq(provided.as_bytes(), expected.as_bytes())
+}
+
+fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    let mut diff = 0_u8;
+    for (&a, &b) in left.iter().zip(right) {
+        diff |= a ^ b;
+    }
+    diff == 0
 }
 
 async fn oauth_authorization_server_metadata(
@@ -316,32 +572,21 @@ async fn oauth_protected_resource_metadata(
     if !state.auth.oauth_enabled() {
         return oauth_not_configured();
     }
-    Json(protected_resource_metadata(&resolve_oauth_base(&state, &headers))).into_response()
+    Json(protected_resource_metadata(&resolve_oauth_base(
+        &state, &headers,
+    )))
+    .into_response()
 }
 
 async fn oauth_authorize_get(
     State(state): State<ListenerState>,
+    headers: HeaderMap,
     Query(params): Query<AuthorizeParams>,
 ) -> Response {
     let Some(oauth) = state.oauth.as_ref() else {
         return oauth_not_configured();
     };
-    authorize_get(
-        oauth,
-        params,
-        Some(state.workspace_path.as_str()),
-    )
-}
-
-async fn oauth_authorize_post(
-    State(state): State<ListenerState>,
-    headers: HeaderMap,
-    Form(form): Form<AuthorizeForm>,
-) -> Response {
-    let Some(oauth) = state.oauth.as_ref() else {
-        return oauth_not_configured();
-    };
-    authorize_post(oauth, form, &resolve_oauth_base(&state, &headers))
+    authorize_get(oauth, params, &resolve_oauth_base(&state, &headers))
 }
 
 async fn oauth_token_post(
@@ -356,12 +601,7 @@ async fn oauth_token_post(
         )
             .into_response();
     };
-    token_exchange(
-        oauth,
-        &headers,
-        form,
-        &resolve_oauth_base(&state, &headers),
-    )
+    token_exchange(oauth, &headers, form, &resolve_oauth_base(&state, &headers))
 }
 
 fn oauth_not_configured() -> Response {

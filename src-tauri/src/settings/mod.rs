@@ -1,3 +1,6 @@
 mod model;
 
-pub use model::{AppSettings, DownloadConfig, FrpProfile, GlobalAuthConfig, GlobalGeneralConfig};
+pub use model::{
+    AppSettings, DownloadConfig, FrpProfile, GlobalAuthConfig, GlobalGeneralConfig,
+    OpenAiConnectorConfig,
+};

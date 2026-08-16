@@ -10,9 +10,9 @@ use uuid::Uuid;
 use walkdir::WalkDir;
 
 use super::model::{
-    BaselineEntry, CapabilityStatus, FileChangeRecord, HarnessEvent, HarnessStatus, OperationRecord,
-    ProjectBaseline, ProjectFileState, ProjectState, TaskSession,
-    TaskStatus, WorkspaceHarnessState, SCHEMA_VERSION,
+    BaselineEntry, CapabilityStatus, FileChangeRecord, HarnessEvent, HarnessStatus,
+    OperationRecord, ProjectBaseline, ProjectFileState, ProjectState, TaskSession, TaskStatus,
+    WorkspaceHarnessState, SCHEMA_VERSION,
 };
 use super::store::{HarnessError, HarnessResult, HarnessStore};
 
@@ -40,12 +40,7 @@ impl Harness {
         let root = dirs::data_local_dir()
             .or_else(dirs::data_dir)
             .ok_or_else(|| HarnessError::new("STORE_UNAVAILABLE", "无法确定应用数据目录"))?;
-        let current = root.join("rootrelay").join("workspace-state");
-        if current.exists() {
-            return Ok(current);
-        }
-        let legacy = root.join("web-codex").join("workspace-state");
-        Ok(if legacy.exists() { legacy } else { current })
+        Ok(root.join("rootrelay").join("workspace-state"))
     }
 
     pub fn workspace_id(&self) -> &str {
@@ -247,7 +242,8 @@ impl Harness {
             affected_files: Vec::new(),
             created_at: timestamp(),
         };
-        self.store.append_operation(&self.workspace_id, &operation)?;
+        self.store
+            .append_operation(&self.workspace_id, &operation)?;
         Ok(operation)
     }
 
@@ -537,12 +533,7 @@ fn should_skip(path: &Path, root: &Path) -> bool {
         .any(|name| {
             matches!(
                 name,
-                ".git"
-                    | "node_modules"
-                    | "target"
-                    | "dist"
-                    | "build"
-                    | ".svelte-kit"
+                ".git" | "node_modules" | "target" | "dist" | "build" | ".svelte-kit"
             )
         })
 }

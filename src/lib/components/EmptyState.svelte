@@ -16,7 +16,7 @@
   </div>
   <h2 class="text-2xl font-bold tracking-tight">添加你的第一个工作区</h2>
   <p class="mt-2 max-w-md text-sm text-[var(--color-text-muted)]">
-    选择项目目录后，可分别启动 MCP 与 Actions 本地服务。
+    选择项目目录后即可启动 MCP 本地服务。
   </p>
   {#if onAdd}
     <button type="button" class="tx-btn-primary mt-6" onclick={onAdd}>

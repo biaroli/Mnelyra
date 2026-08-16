@@ -458,6 +458,15 @@ pub fn is_allowed_tool(name: &str) -> bool {
     ALLOWED_TOOLS.contains(&name)
 }
 
+pub fn is_read_only_tool(name: &str) -> bool {
+    let canonical = canonical_tool_name(name);
+    P0_TOOLS
+        .iter()
+        .find(|(tool_name, ..)| *tool_name == canonical)
+        .map(|(_, _, _, read_only, _, _)| *read_only)
+        .unwrap_or(false)
+}
+
 pub fn canonical_tool_name(name: &str) -> &str {
     match name {
         "grep" => "grep_text",

@@ -1,109 +1,146 @@
-# RootRelay development
+# Mnelyra development
 
-This document is for maintainers. The public README stays focused on installing, connecting, and using RootRelay.
+This repository contains one desktop application. The SvelteKit frontend lives in `src/`; the Tauri/Rust runtime lives in `src-tauri/`.
 
-## Project layout
+## Local development
 
-| Path | Purpose |
-| --- | --- |
-| `src/` | SvelteKit desktop UI |
-| `src-tauri/src/` | Rust backend, MCP server, auth, workspace runtime, tunnels, tools, and updater |
-| `src-tauri/tests/` | Rust integration and contract tests |
-| `src-tauri/icons/` | Tauri application icons |
-| `static/` | Frontend assets and README preview |
-| `.github/workflows/` | CI and tagged release automation |
-
-RootRelay uses one application-level MCP configuration. Imported workspaces provide project roots; selecting a workspace changes the active root while keeping the configured service identity, authentication, and remote endpoint stable.
-
-## Local environment
-
-Use Node.js 20 or newer, Rust stable, and the platform dependencies required by Tauri 2.
+Install JavaScript dependencies once:
 
 ```bash
-npm install
-npm run check
+npm ci
+```
+
+Run the desktop application:
+
+```bash
 npm run desktop
 ```
 
-`npm run desktop` starts Tauri development mode. Rust source changes rebuild and restart the backend process, so an MCP connection to the development instance can briefly disconnect during backend edits.
+Run the frontend only:
 
-## Verification
+```bash
+npm run dev
+```
 
-Frontend checks:
+Codex-backed features require a working Codex CLI. Mnelyra discovers `codex` from `PATH`; `MNELYRA_CODEX_BIN` can point to an exact executable/script when discovery is not appropriate.
+
+## Required checks
+
+Frontend:
 
 ```bash
 npm run check
 npm run build
 ```
 
-Rust checks:
+Rust:
 
 ```bash
 cd src-tauri
-cargo check
-cargo test --lib
-cargo clippy --lib --all-targets -- -D warnings
+cargo fmt -- --check
+cargo test
+cargo clippy --all-targets -- -D warnings
 ```
 
-The repository contains older Rust formatting that is not currently enforced as a repository-wide `cargo fmt --check` gate. New changes should still follow rustfmt output where practical.
-
-## Persistent compatibility
-
-The visible product and protocol identity is RootRelay. Some internal legacy identifiers remain intentionally compatible with existing installations.
-
-The Tauri application identifier remains `io.github.biaroli.webcodex` so an installed predecessor is not treated as an unrelated application during upgrade. The runtime accepts both the current RootRelay macOS bundle shape and the previous bundle shape when reclaiming managed ports.
-
-Application data now prefers a `rootrelay` directory. If a previous `web-codex-desktop` data directory exists and the RootRelay directory does not, startup attempts to migrate it and falls back to the existing directory if the rename cannot be completed.
-
-New project history defaults to `.rootrelay/history-session/`. Projects that already contain `.web-codex/history-session/` continue to use that directory until they are migrated deliberately.
-
-## Build packages
+Repository hygiene:
 
 ```bash
-npm run desktop:build
+git diff --check
+git status --short
 ```
 
-Tauri reads the product name and updater configuration from `src-tauri/tauri.conf.json`.
+Do not commit generated trees such as `node_modules`, `.svelte-kit`, `build`, or `src-tauri/target`.
 
-## Release workflow
+## Runtime model
 
-The release workflow builds Windows NSIS and universal macOS packages with `tauri-apps/tauri-action` and uploads updater metadata and signatures to the GitHub Release.
+Mnelyra has one authoritative Workspace at a time. Workspace switching is not a cosmetic selection: the active local MCP runtime is drained and rebound so new requests resolve against the selected project directory.
 
-The repository Actions secret used for updater signing is:
+The main runtime layers are:
 
 ```text
-TAURI_SIGNING_PRIVATE_KEY
+MCP client / ChatGPT App / other upstream
+                |
+       remote connection layer
+ OpenAI Secure Tunnel / Cloudflare / FRP
+                |
+           local MCP listener
+                |
+          shared tool dispatcher
+                |
+             Workspace
+
+Native Codex app-server is managed beside this path and is bound to the
+same active Workspace and application permission setting.
 ```
 
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` is only needed when the updater private key was created with a password. An unset password secret is valid for an unencrypted key.
+The desktop UI intentionally does not contain a second Codex task/session console. Remote Codex-control tools and the native session coordinator remain runtime capabilities, but the user’s chat/task UI stays in the upstream client/Codex surface.
 
-The private key must match the public updater key in `src-tauri/tauri.conf.json`. Never commit the private key. Local ignored key material may live under `.rootrelay/` or the legacy `.web-codex/` maintainer directory.
+## Permission ceiling
 
-Before a release, keep the version aligned in these files:
+The application setting `general.permissionCeiling` has three supported values:
 
-```text
-package.json
-src-tauri/Cargo.toml
-src-tauri/tauri.conf.json
-```
+- `automatic` — do not add a Mnelyra permission profile;
+- `read_only` — block mutating MCP tools and mutating Codex controls;
+- `custom` — Codex uses `workspace-write`, network is enabled, and Windows uses the elevated sandbox. A scoped MiKTeX writable root/environment is added only when a local MiKTeX installation is detected.
 
-After verification, create and push a version tag:
+The setting is persisted globally and is applied when the MCP runtime starts. Changing it uses the `set_permission_ceiling` command, which reconfigures the native Codex app-server and restarts the running MCP service so the new policy takes effect immediately.
 
-```bash
-git tag v0.1.1
-git push origin v0.1.1
-```
+Read-only is enforced twice: mutating tools are omitted from the advertised tool catalog where possible, and the shared dispatcher rejects them again before execution.
 
-The release must contain the platform installers, updater artifacts, signature files, and `latest.json`. The application updater endpoint is configured to read `latest.json` from the RootRelay GitHub Releases page.
+## Authentication
 
-## Repository rename checklist
+Authentication is application-level. Workspace copies of old auth fields exist only for compatibility and are overridden at runtime by the global configuration.
 
-When the GitHub repository itself is renamed to `RootRelay`, verify the `origin` remote and every release/updater URL before tagging a release.
+OAuth uses:
 
-```bash
-git remote -v
-git grep -n "Codex-Web"
-git grep -n "codex-web"
-```
+- a stable installation Client ID;
+- a rotatable client/connection secret;
+- PKCE (`S256`) authorization codes;
+- an internal token-signing secret.
 
-Old names are acceptable only where the code explicitly documents backward compatibility.
+There is no authorization-password page or POST authorization step. `/oauth/authorize` validates the request and PKCE parameters and redirects with a short-lived authorization code. Internal token-signing material is not exposed through frontend secret commands.
+
+New installations generate Client IDs with the `mnelyra-client-` prefix. Existing persisted IDs are not forcibly renamed.
+
+## Durable history and harness state
+
+Conversation persistence is Workspace-owned. `history_session_bootstrap`, `history_session_checkpoint`, `history_session_search`, and `history_session_read` maintain a lossless numbered Markdown archive and bounded retrieval flow.
+
+The history layer and the harness are not the runtime authority. The harness stores task/checkpoint/operation evidence; the active Workspace/runtime layer decides where live operations execute.
+
+## Remote connections
+
+Local MCP listeners bind to loopback. A remote client therefore needs a remote route. Mnelyra currently supports:
+
+- OpenAI Secure MCP Tunnel;
+- Cloudflare routing;
+- FRP.
+
+The OpenAI tunnel helper is an implementation dependency of Start, not a separate setup step in the UI.
+
+Connection status shown in the topology should reflect real runtime state. Do not animate the upstream-to-computer flow merely because the local MCP listener is running; a remote route must also be ready.
+
+## Secrets and local state
+
+Never put runtime credentials in source, test fixtures, screenshots, or documentation. The repository should contain only secret **field names**, not real values.
+
+Application data is resolved outside the source tree. Tests and documentation capture must use synthetic credentials and isolated data directories.
+
+Before publishing, scan for at least:
+
+- API keys/bearer tokens/private keys;
+- OAuth client secrets;
+- Cloudflare/FRP credentials;
+- real Tunnel IDs;
+- absolute personal project paths;
+- local runtime profiles or screenshots that were not created specifically for public documentation.
+
+## Public documentation screenshots
+
+README screenshots live under `static/readme/` and must be captured from the current production UI with a synthetic/demo backend. Never capture a normal developer instance: Authentication, Connections, Workspace, and Memory can expose local identifiers, project paths, endpoints, and credentials.
+
+The public images use fictional workspaces, paths, domains, Client IDs, tokens, and provider state. Temporary demo shims and browser profiles used to create those captures must be removed after the screenshots are produced.
+
+## Naming
+
+The product name is **Mnelyra**. Internal historical Rust crate/library identifiers may still contain `rootrelay`; changing an internal identifier is not required unless it leaks into user-visible UI, documentation, generated Client IDs, package metadata, or release artifacts.

@@ -42,7 +42,6 @@ pub fn ensure_frp_health_loop() {
 fn tunnel_type_for(profile: &WorkspaceProfile, kind: TunnelServiceKind) -> &str {
     match kind {
         TunnelServiceKind::Mcp => profile.tunnel.tunnel_type.as_str(),
-        TunnelServiceKind::Actions => profile.actions.tunnel_type.as_str(),
     }
 }
 
@@ -91,7 +90,6 @@ pub async fn cleanup_orphan_for_runtime(
 ) -> AppResult<()> {
     let port = match kind {
         TunnelServiceKind::Mcp => profile.runtime.local_port,
-        TunnelServiceKind::Actions => profile.actions.local_port,
     };
     if runtime_listening || platform().find_pid_listening_on_port(port)?.is_some() {
         return Ok(());

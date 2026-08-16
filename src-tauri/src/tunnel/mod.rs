@@ -2,6 +2,7 @@ mod access;
 mod cloudflare;
 mod download;
 mod frp;
+mod openai;
 mod software;
 mod supervisor;
 
@@ -18,7 +19,13 @@ pub use cloudflare::{
     extract_trycloudflare_url, resolve_cloudflared, spawn_cloudflare_tunnel, stop_child,
 };
 #[allow(unused_imports)]
-pub use frp::{actions_frp_snippet, mcp_frp_snippet};
+pub use frp::mcp_frp_snippet;
+pub use openai::{
+    ensure_tunnel_client as ensure_openai_tunnel_client,
+    validate_alias as validate_openai_tunnel_alias,
+    validate_tunnel_id as validate_openai_tunnel_id, OpenAiConnectorStatus, OpenAiTunnelManager,
+    TUNNEL_CLIENT_VERSION, TUNNEL_RUNTIME_KEY,
+};
 #[allow(unused_imports)]
 pub use software::{install_software, list_software, uninstall_software, SoftwareStatus};
 #[allow(unused_imports)]

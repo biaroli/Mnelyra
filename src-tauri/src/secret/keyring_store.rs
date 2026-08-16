@@ -4,19 +4,13 @@ use crate::error::AppResult;
 pub struct SecretStore;
 
 impl SecretStore {
-    #[cfg(test)]
-    pub fn remove_workspace_secrets(profile_id: &str) -> AppResult<()> {
-        DataStore::update_file(|data| {
-            data.workspace_secrets.remove(profile_id);
-            Ok(())
-        })
-    }
-
-    pub fn set(profile_id: &str, key: &str, value: &str) -> AppResult<()> {
-        DataStore::update_file(|data| {
-            workspace_secret_map(data, profile_id).insert(key.to_string(), value.to_string());
-            Ok(())
-        })
+    pub fn get_or_create_app(scope: &str, item_id: &str) -> AppResult<String> {
+        if let Some(value) = Self::get_app(scope, item_id)? {
+            return Ok(value);
+        }
+        let value = random_secret();
+        Self::set_app(scope, item_id, &value)?;
+        Ok(value)
     }
 
     pub fn get(profile_id: &str, key: &str) -> AppResult<Option<String>> {
@@ -28,12 +22,6 @@ impl SecretStore {
                 .filter(|value| !value.is_empty())
                 .cloned())
         })
-    }
-
-    pub fn regenerate(profile_id: &str, key: &str) -> AppResult<String> {
-        let value = random_secret();
-        Self::set(profile_id, key, &value)?;
-        Ok(value)
     }
 
     pub fn get_shared(key: &str) -> AppResult<Option<String>> {
@@ -51,7 +39,6 @@ impl SecretStore {
         })
     }
 
-    #[cfg(test)]
     pub fn set_app(scope: &str, item_id: &str, value: &str) -> AppResult<()> {
         DataStore::update_file(|data| {
             data.app_secrets
@@ -61,16 +48,6 @@ impl SecretStore {
             Ok(())
         })
     }
-
-}
-
-fn workspace_secret_map<'a>(
-    data: &'a mut crate::data::AppData,
-    profile_id: &str,
-) -> &'a mut std::collections::HashMap<String, String> {
-    data.workspace_secrets
-        .entry(profile_id.to_string())
-        .or_default()
 }
 
 fn random_secret() -> String {
@@ -84,14 +61,5 @@ mod tests {
     #[test]
     fn random_secret_is_non_empty() {
         assert!(random_secret().len() > 32);
-    }
-
-    #[test]
-    fn workspace_secret_roundtrip() {
-        let id = uuid::Uuid::new_v4().to_string().replace('-', "");
-        SecretStore::set(&id, "oauth_client_secret", "roundtrip-secret").expect("set");
-        let loaded = SecretStore::get(&id, "oauth_client_secret").expect("get");
-        assert_eq!(loaded.as_deref(), Some("roundtrip-secret"));
-        let _ = SecretStore::remove_workspace_secrets(&id);
     }
 }

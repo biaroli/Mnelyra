@@ -1,7 +1,196 @@
 export type RuntimeState = "stopped" | "starting" | "running" | "stopping" | "error";
 
+export type ActiveWorkspacePhase =
+  | "none"
+  | "activating"
+  | "active"
+  | "draining"
+  | "switching"
+  | "error";
+
+export interface ActiveWorkspaceState {
+  workspaceId: string | null;
+  phase: ActiveWorkspacePhase;
+  generation: number;
+  sinceUnixMs: number | null;
+  message: string | null;
+}
+
+export interface ProviderCheckpointSummary {
+  checkpointId: string;
+  providerId: string;
+  mnelyraSessionId: string;
+  providerSessionId: string;
+  providerTurnId: string | null;
+  capturedAt: string;
+  contentSha256: string;
+}
+
+export interface WorkspaceMemoryOverview {
+  workspaceId: string;
+  historyRoot: string;
+  manifestExists: boolean;
+  stateExists: boolean;
+  archiveRevision: string;
+  memoryRevision: string;
+  generatedAt: string;
+  currentFocus: string;
+  recentChanges: string[];
+  openItems: string[];
+  providerCheckpointCount: number;
+  providerCheckpoints: ProviderCheckpointSummary[];
+}
+
+export interface ProviderCheckpoint {
+  version: number;
+  checkpointId: string;
+  providerId: string;
+  mnelyraSessionId: string;
+  workspaceId: string;
+  canonicalWorkspacePath: string;
+  providerSessionId: string;
+  providerTurnId: string | null;
+  capturedAt: string;
+  source: string;
+  contentSha256: string;
+  threadMetadata: unknown;
+  turnSnapshot: unknown;
+}
+
+export interface OpenAiConnectorSettings {
+  enabled: boolean;
+  tunnelId: string;
+  alias: string;
+  hasRuntimeKey: boolean;
+  tunnelClientVersion: string;
+}
+
+export interface OpenAiConnectorStatus {
+  configured: boolean;
+  hasRuntimeKey: boolean;
+  tunnelId: string;
+  alias: string;
+  binaryInstalled: boolean;
+  binaryVersion: string;
+  processRunning: boolean;
+  healthy: boolean;
+  ready: boolean;
+  runtimeState: string | null;
+  uiUrl: string | null;
+  detail: string;
+}
+
+export type ProviderCapability =
+  | "status"
+  | "sessions"
+  | "start_task"
+  | "send_input"
+  | "cancel_task"
+  | "compaction"
+  | "drain"
+  | "resume";
+
+export interface CodexConfigReadResponse {
+  config?: Record<string, unknown>;
+  origins?: Record<string, unknown>;
+  layers?: unknown[];
+}
+
+export type ProviderState =
+  | "unavailable"
+  | "ready"
+  | "busy"
+  | "version_mismatch"
+  | "error";
+
+export interface ProviderDescriptor {
+  id: string;
+  name: string;
+  capabilities: ProviderCapability[];
+}
+
+export interface ProviderStatus {
+  providerId: string;
+  state: ProviderState;
+  configured: boolean;
+  activityKnown: boolean;
+  version: string | null;
+  mode: string | null;
+  pid: number | null;
+  acceptingTasks: boolean | null;
+  activeTurns: number;
+  activeHttpTurns: number;
+  activeBrowserTurns: number;
+  sessionReady: boolean | null;
+  message: string;
+}
+
+export type TaskSessionState =
+  | "queued"
+  | "starting"
+  | "running"
+  | "waiting_for_user"
+  | "waiting_for_tool"
+  | "compacting"
+  | "draining"
+  | "completed"
+  | "cancelled"
+  | "failed";
+
+export interface TaskSession {
+  id: string;
+  workspaceId: string;
+  canonicalWorkspacePath: string;
+  providerId: string;
+  providerSessionId: string | null;
+  title: string;
+  state: TaskSessionState;
+  createdAt: string;
+  updatedAt: string;
+  lastActivityAt: string;
+}
+
+export interface SessionEvent {
+  id: string;
+  sessionId: string;
+  kind: string;
+  text: string;
+  createdAt: string;
+  details: unknown | null;
+  revision: number;
+}
+
+export interface SessionEventPage {
+  events: SessionEvent[];
+  nextCursor: number;
+  reset: boolean;
+}
+
+export interface PendingSessionRequest {
+  id: string;
+  sessionId: string;
+  method: string;
+  params: unknown;
+  createdAt: string;
+}
+
+export interface ActivitySnapshot {
+  workspaceId: string;
+  activeMcpRequests: number;
+  runningExecSessions: number;
+  activeProviderTurns: number;
+  pendingProviderOperations: number;
+  providerActivityKnown: boolean;
+  drainRequested: boolean;
+}
+
+export interface SwitchCheck {
+  allowed: boolean;
+  reasons: string[];
+  activity: ActivitySnapshot;
+}
+
 export const DEFAULT_SERVICE_PORT = 28766;
-export const DEFAULT_ACTIONS_PORT = 8787;
 
 export interface TunnelConfig {
   type: string;
@@ -28,15 +217,13 @@ export interface AuthConfig {
 
 export interface GlobalAuthConfig {
   mcpAuthType: string;
-  actionsAuthType: string;
-  actionsOauthScopes: string;
 }
 
 export interface GlobalGeneralConfig {
   configured: boolean;
+  permissionCeiling: "automatic" | "read_only" | "custom";
   mcpTunnel: TunnelConfig;
   mcpRuntime: RuntimeConfig;
-  actions: ActionsConfig;
 }
 
 export interface RuntimeConfig {
@@ -49,26 +236,6 @@ export interface RuntimeConfig {
   workspace_script_extensions?: string;
 }
 
-export interface ActionsConfig {
-  public_url: string;
-  tunnel_type: string;
-  frp_server: string;
-  frp_subdomain: string;
-  frp_profile_id?: string;
-  frp_server_port?: number;
-  cloudflare_mode: string;
-  cloudflare_token?: string;
-  local_port: number;
-  permission_mode: string;
-  runtime_command?: string;
-  auth_type: string;
-  oauth_client_id?: string;
-  oauth_scopes?: string;
-  allowed_commands?: string;
-  max_patch_bytes?: number;
-  use_shared_secrets?: boolean;
-}
-
 export interface WorkspaceProfile {
   id: string;
   name: string;
@@ -76,7 +243,6 @@ export interface WorkspaceProfile {
   tunnel: TunnelConfig;
   auth: AuthConfig;
   runtime: RuntimeConfig;
-  actions?: ActionsConfig;
 }
 
 export interface RuntimeStatus {
@@ -88,36 +254,8 @@ export interface RuntimeStatus {
   publicEndpoint: string;
 }
 
-export function actionsConfig(profile: WorkspaceProfile): ActionsConfig {
-  return {
-    public_url: "",
-    tunnel_type: "frp",
-    frp_server: "",
-    frp_subdomain: "",
-    cloudflare_mode: "quick",
-    local_port: DEFAULT_ACTIONS_PORT,
-    permission_mode: "trusted",
-    auth_type: "api_key",
-    allowed_commands:
-      "pytest,python,python3,npm,npx,node,pnpm,yarn,make,mvn,mvnw,gradle,gradlew,cargo,go,ruff,mypy,eslint,tsc",
-    max_patch_bytes: 200_000,
-    ...profile.actions,
-  };
-}
-
 export function mcpLocalEndpoint(port: number): string {
   return `http://127.0.0.1:${port}/mcp`;
-}
-
-export function actionsLocalEndpoint(port: number): string {
-  return `http://127.0.0.1:${port}`;
-}
-
-export interface ActionsAuthDraft {
-  authType: string;
-  oauthClientId: string;
-  oauthScopes: string;
-  useSharedSecrets?: boolean;
 }
 
 export interface FrpProfileSummary {
@@ -142,53 +280,4 @@ export function frpPublicUrl(
     profiles.find((profile) => profile.id === frpProfileId)?.server ?? frpServer;
   if (!server) return publicUrl.replace(/\/$/, "");
   return `https://${frpSubdomain}.${server}`;
-}
-
-export function actionsPublicBaseUrl(
-  profile: WorkspaceProfile,
-  frpProfiles: FrpProfileSummary[] = [],
-): string {
-  const actions = actionsConfig(profile);
-  const publicUrl = frpPublicUrl(
-    actions.tunnel_type,
-    actions.frp_subdomain,
-    actions.frp_server,
-    actions.frp_profile_id,
-    frpProfiles,
-    actions.public_url,
-  );
-  if (publicUrl) return publicUrl;
-  return actionsLocalEndpoint(actions.local_port);
-}
-
-export function actionsOpenApiUrl(
-  profile: WorkspaceProfile,
-  frpProfiles: FrpProfileSummary[] = [],
-): string {
-  const base = actionsPublicBaseUrl(profile, frpProfiles);
-  return base ? `${base.replace(/\/$/, "")}/openapi.json` : "";
-}
-
-export function actionsPrivacyUrl(
-  profile: WorkspaceProfile,
-  frpProfiles: FrpProfileSummary[] = [],
-): string {
-  const base = actionsPublicBaseUrl(profile, frpProfiles);
-  return base ? `${base.replace(/\/$/, "")}/privacy` : "";
-}
-
-export function actionsOAuthAuthorizeUrl(
-  profile: WorkspaceProfile,
-  frpProfiles: FrpProfileSummary[] = [],
-): string {
-  const base = actionsPublicBaseUrl(profile, frpProfiles);
-  return base ? `${base.replace(/\/$/, "")}/oauth/authorize` : "";
-}
-
-export function actionsOAuthTokenUrl(
-  profile: WorkspaceProfile,
-  frpProfiles: FrpProfileSummary[] = [],
-): string {
-  const base = actionsPublicBaseUrl(profile, frpProfiles);
-  return base ? `${base.replace(/\/$/, "")}/oauth/token` : "";
 }

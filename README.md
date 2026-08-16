@@ -1,11 +1,13 @@
 <p align="center">
-  <img src="static/favicon.png" width="108" alt="RootRelay icon">
+  <img src="static/favicon.png" width="108" alt="Mnelyra icon">
 </p>
 
-<h1 align="center">RootRelay</h1>
+<h1 align="center">Mnelyra</h1>
+
+<h3 align="center">One local workspace and one project memory for ChatGPT, Claude, Codex, and any MCP-compatible client.</h3>
 
 <p align="center">
-  Connect a local workspace to MCP-compatible clients through one stable endpoint.
+  <strong>Codex is optional: remote clients can edit files, run commands, and test projects directly through MCP. When quota gets tight, an optional ChatGPT Web bridge can add your ChatGPT Web subscription as another model path.</strong>
 </p>
 
 <p align="center">
@@ -13,114 +15,93 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/biaroli/RootRelay/releases/latest"><img src="https://img.shields.io/github/v/release/biaroli/RootRelay?label=release" alt="release"></a>
+  <a href="https://github.com/biaroli/Mnelyra/releases/latest"><img src="https://img.shields.io/github/v/release/biaroli/Mnelyra?label=release" alt="release"></a>
   <img src="https://img.shields.io/badge/Windows-x64-0078D4?logo=windows" alt="Windows x64">
   <img src="https://img.shields.io/badge/macOS-universal-000000?logo=apple" alt="macOS universal">
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0">
 </p>
 
-RootRelay runs an MCP server on your computer and points it at the workspace you choose. A connected client can read and edit files, search the project, run approved commands and tests, inspect Git, view images, and keep project-scoped session history.
+Mnelyra turns a real local project directory into a workspace that multiple AI clients can share. ChatGPT, Claude, or any compatible MCP client can read and edit files, search the project, apply patches, run commands and tests, inspect Git, and view images directly from the remote chat surface. Codex can be attached when you want its harness, but it is not required to use Mnelyra.
 
-The client connection stays stable while the active workspace changes. Import several projects once, then select a project in the sidebar to switch the MCP root and activate it immediately.
+The Workspace is also the memory boundary. Move from one upstream client to another and the project history, current focus, recent changes, and open work can stay with the project instead of being trapped in one chat window or one model provider.
 
-![RootRelay workspace preview](static/readme/rootrelay-workspace.svg)
+![Current Mnelyra UI](static/readme/mnelyra-connections.png)
 
-The preview uses fictional project names, paths, domains, and credentials.
+> Every README screenshot is generated from the current Mnelyra production UI in an isolated demo environment. Project names, paths, domains, Client IDs, tokens, and credentials are fictional; no developer machine data is captured.
 
-## About
+## Why Mnelyra
 
-RootRelay is a desktop MCP workspace relay for local development projects. It keeps one MCP service identity and one client-facing endpoint while letting you switch the project root behind that connection from the desktop UI.
+| ChatGPT Web as another model path | One workspace, shared memory | Codex is optional |
+| --- | --- | --- |
+| Optionally connect a ChatGPT Web bridge and use your own ChatGPT Web subscription as an additional model path instead of depending on one Codex/API quota. | ChatGPT, Claude, Codex, and other MCP upstreams can work around the same Workspace while project history and recovery state stay with that Workspace. | Any MCP-compatible upstream can operate the Workspace directly. Attach the Codex harness only when you want it; Mnelyra does not require Codex to expose local tools. |
 
-The goal is simple: import your workspaces once, connect an MCP-compatible client once, and move between projects without rebuilding the connection every time. RootRelay handles the local workspace boundary, MCP tools, authentication, tunnel lifecycle, and project-scoped session history around that workflow.
+## Feature tour
 
-## Why RootRelay
+### One entry point for every upstream
 
-| Area | What RootRelay does |
-| --- | --- |
-| Workspace | Imports local project folders and switches the active project root from the sidebar |
-| MCP | Serves a Streamable HTTP MCP endpoint with file, search, patch, command, Git, image, and history tools |
-| Client support | Works with clients that support the MCP transport and authentication mode you configure |
-| Remote access | Supports Cloudflare Named Tunnel, Cloudflare Quick Tunnel, FRP, or local-only access |
-| Authentication | Supports OAuth, bearer token, or no authentication for local use |
-| Stable identity | Keeps one installation-level OAuth Client ID across restarts, workspace switches, and normal app maintenance |
-| Session history | Stores project-scoped development history under `.rootrelay/history-session/` |
-| Actions gateway | Can expose a separate OpenAPI Actions endpoint when that integration is useful |
+Upstream clients connect to Mnelyra once. OpenAI secure connection, Cloudflare, and FRP are managed from the Connections page; Workspace switching happens behind that connection, so changing projects does not mean rebuilding every ChatGPT, Claude, or MCP client configuration.
 
-## MCP clients
+### One control surface for the Workspace
 
-RootRelay is client-agnostic. ChatGPT and Claude are common remote MCP clients, and the same RootRelay endpoint can be used by other MCP-compatible clients when they support Streamable HTTP and the selected authentication mode.
+Application-level settings stay in one place: local MCP service, permission ceiling, developer controls, and ChatGPT compaction policy. They apply across imported Workspaces instead of being rebuilt project by project.
 
-Client products do not all expose the same MCP features or permissions. RootRelay provides the server and tools; the client decides which server capabilities it can use.
+![Mnelyra General settings](static/readme/mnelyra-general.png)
 
-## Install
+### Stable connection identity
 
-Download the current build from [GitHub Releases](https://github.com/biaroli/RootRelay/releases/latest).
+OAuth, bearer token, and trusted local no-auth modes are supported. The installation-level OAuth Client ID stays stable while connection credentials can be rotated; switching projects does not require a new client identity.
+
+![Mnelyra Authentication](static/readme/mnelyra-authentication.png)
+
+### Direct project control without Codex
+
+MCP already exposes file reads and edits, search, patches, commands, tests, Git, images, and history tools rooted at the active Workspace. Codex is an optional harness, not a prerequisite for Mnelyra.
+
+## How it fits together
+
+![Mnelyra architecture](static/readme/mnelyra-architecture.svg)
+
+The client connection and project root are separate. Import projects once, then switch the active Workspace from the sidebar while clients keep using the same Mnelyra connection.
+
+## Quick start
+
+### 1. Install
+
+Download the current build from [GitHub Releases](https://github.com/biaroli/Mnelyra/releases/latest).
 
 | Platform | Package |
 | --- | --- |
-| Windows 10/11 x64 | `RootRelay_*_x64-setup.exe` |
-| macOS Intel + Apple Silicon | `RootRelay_*_universal.dmg` |
+| Windows 10/11 x64 | `Mnelyra_*_x64-setup.exe` |
+| macOS Intel + Apple Silicon | `Mnelyra_*_universal.dmg` |
 
-The macOS build is not currently notarized with an Apple Developer certificate. On first launch, macOS may require approval in System Settings → Privacy & Security.
+The macOS build is not currently notarized with an Apple Developer certificate. First launch may require approval in System Settings → Privacy & Security.
 
-## First setup
+### 2. Add a Workspace
 
-### 1. Configure the MCP service
+Use the folder button in the sidebar and select a project root. Selecting a Workspace switches the MCP root and activates that project; there is no second start button.
 
-Open General. Choose the local MCP port, permission mode, allowed commands, and the tunnel mode you want to use. Save the configuration once; it is shared by every imported workspace.
+### 3. Choose a connection path
 
-For local-only clients, disable the public tunnel and use an endpoint such as:
+Open **Connections**:
+
+| Use case | Path |
+| --- | --- |
+| OpenAI / ChatGPT secure MCP path | OpenAI secure connection |
+| Stable public hostname | Cloudflare Named Tunnel |
+| Temporary testing | Cloudflare Quick Tunnel |
+| Self-hosted reverse proxy | FRP |
+
+The local MCP endpoint is typically:
 
 ```text
 http://127.0.0.1:28766/mcp
 ```
 
-### 2. Configure authentication
+### 4. Configure authentication and connect a client
 
-Open Authentication. OAuth is the recommended choice for a public MCP endpoint.
+Open **Settings → Authentication**. OAuth is recommended for a public MCP endpoint; bearer token is also available. Trusted local-only use can run without authentication.
 
-RootRelay creates one installation-level OAuth Client ID and keeps it stable. The Client ID is read-only in the UI. Authorization credentials and secrets can still be rotated independently.
-
-### 3. Import a workspace
-
-Choose Add workspace and select a project root.
-
-After import, selecting a workspace performs the full switch automatically:
-
-```text
-remember selection
-→ stop the previous workspace MCP runtime
-→ switch the project root
-→ activate the selected workspace with the shared configuration
-```
-
-There is no second start button after selecting a workspace.
-
-## Remote access
-
-### Cloudflare Named Tunnel
-
-Named Tunnel is the best fit for a long-lived remote connection. Configure a Tunnel Token and a fixed HTTPS hostname such as `https://mcp.example.com`, then give the client:
-
-```text
-https://mcp.example.com/mcp
-```
-
-The fixed hostname and the fixed OAuth Client ID remain unchanged when you switch projects. RootRelay waits for a replacement tunnel to become ready before retiring the previous connector.
-
-### Cloudflare Quick Tunnel
-
-Quick Tunnel is useful for temporary testing. Its `trycloudflare.com` address may change after a restart, so it is not intended as a permanent client endpoint.
-
-### FRP
-
-If you operate an FRPS server, save the server address, port, and token in FRP Configuration. Then select FRP in General and assign the subdomain used by the MCP service.
-
-## Connect a client
-
-Enter the `/mcp` URL shown by RootRelay into a client that supports custom MCP servers and choose the same authentication mode configured in RootRelay.
-
-A simple first connection check is:
+Enter the `/mcp` URL shown by Mnelyra into ChatGPT, Claude, or another client that supports custom MCP servers. A first connection check can call:
 
 ```text
 server_info
@@ -128,48 +109,99 @@ get_default_cwd
 git_status
 ```
 
-`server_info` confirms the RootRelay service, `get_default_cwd` confirms the active project root, and `git_status` confirms that Git operations are pointed at the expected repository.
+`get_default_cwd` should resolve to the active Workspace and `git_status` should report the same project.
 
-## Workspace switching
+## ChatGPT Web path
 
-Ports, authentication, tunnel settings, and execution policy are application-level configuration. The selected workspace supplies the project root.
+Mnelyra can attach Codex as an optional provider instead of making Codex a prerequisite for the whole system. With the ChatGPT Web bridge, a ChatGPT Web subscription can become an additional model path on top of the same Workspace, MCP tools, and project memory.
 
-That separation is what allows a client to keep the same remote URL and OAuth identity while RootRelay changes the project behind the endpoint.
+This is useful when a single Codex/API quota is constrained, but it still uses your own ChatGPT account and the capabilities available to that account. Browser integration can also be affected by changes to the ChatGPT web UI.
 
-When the app restarts, RootRelay restores the last selected workspace and starts the configured MCP service again.
+## Workspace memory
 
-## Session history
+Mnelyra memory follows the Workspace. Different upstream clients can continue work on the same project without treating one ChatGPT conversation, Claude conversation, or Codex task as the only source of project continuity.
 
-RootRelay can keep development context inside the project:
-
-```text
-.rootrelay/history-session/
-```
+The public history tools are:
 
 | Tool | Purpose |
 | --- | --- |
-| `history_session_bootstrap` | Starts or restores the session archive for a conversation |
-| `history_session_checkpoint` | Saves decisions, changes, verification, and next actions |
-| `history_session_search` | Searches previous session archives |
-| `history_session_read` | Reads one archived session |
-| `history_session_validate` | Validates archive numbering and the derived index |
+| `history_session_bootstrap` | Initialize or restore project history for a conversation |
+| `history_session_checkpoint` | Save decisions, changes, verification, and next actions |
+| `history_session_search` | Search previous sessions |
+| `history_session_read` | Read an archived session |
+| `history_session_validate` | Validate archive numbering and indexes |
 
-RootRelay does not read a remote chat window in the background. History is written only when the MCP client calls the history tools.
+Provider checkpoints are shown when the provider actually exposes recoverable checkpoint state; Mnelyra does not fabricate empty checkpoint placeholders.
+
+## Permissions
+
+Developer mode exposes one application-level permission ceiling:
+
+| Mode | Behavior |
+| --- | --- |
+| **Automatic** | Mnelyra adds no extra restriction beyond the current downstream policy |
+| **Read only** | Blocks writes, patches, command execution, and other mutating operations at the Mnelyra layer |
+| **Workspace read/write** | Allows reads, writes, and network access inside the active Workspace boundary |
+
+On Windows, the optional Codex integration keeps its workspace sandbox and scoped MiKTeX compatibility setup. This is not unrestricted host-filesystem access.
+
+## Public routing
+
+### Cloudflare
+
+Named Tunnel is the long-lived option; Quick Tunnel is for temporary testing. A fixed endpoint can look like:
+
+```text
+https://mcp.example.com/mcp
+```
+
+### FRP
+
+If you operate an FRPS server, enter its server, port, subdomain, and token on the Connections page. Mnelyra maintains one application-level FRP route rather than a profile library per Workspace.
+
+### OpenAI secure connection
+
+The Connections page can store a Tunnel ID and OpenAI API Key and start the secure MCP path used by the OpenAI platform. This path is independent from normal Cloudflare/FRP public routing.
+
+## Run from source
+
+You need Node.js, npm, Rust stable, and the platform dependencies required by Tauri 2.
+
+```bash
+npm ci
+npm run desktop
+```
+
+Checks used before shipping changes:
+
+```bash
+npm run check
+npm run build
+
+cd src-tauri
+cargo fmt -- --check
+cargo test
+cargo clippy --all-targets -- -D warnings
+```
+
+Maintainer notes are in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Security
 
-RootRelay can modify files and execute commands inside the selected workspace. Protect public endpoints with authentication and only connect clients you trust.
+Mnelyra can modify files and execute commands. Protect public endpoints with authentication and only connect clients you control or explicitly trust.
 
-On Windows, command safety is enforced primarily by RootRelay workspace boundaries and command policy. It should not be treated as a complete operating-system sandbox.
+Workspace boundaries, the Mnelyra permission ceiling, and downstream sandboxes are separate layers. Mnelyra should not be treated as a complete operating-system isolation container.
 
-## Development
-
-Maintainer setup and engineering notes are kept in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+The ChatGPT Web bridge is an unofficial browser integration and can be affected by web UI or account-capability changes. Use your own account and follow the applicable service terms and workspace policies.
 
 ## License
 
-RootRelay is licensed under the [Apache License 2.0](LICENSE).
+Mnelyra is licensed under the [Apache License 2.0](LICENSE).
 
-RootRelay grew out of [mybolide/coding-tools-mcp](https://github.com/mybolide/coding-tools-mcp), which itself is a fork of the original Coding Tools MCP project. Thanks to its contributors for the early Apache-2.0 code base. Copyright 2026 Coding Tools MCP Contributors.
+## Acknowledgements
 
-RootRelay is not affiliated with or endorsed by OpenAI, Anthropic, or Cloudflare.
+Mnelyra was previously released as RootRelay and Codex-Web.
+
+Thanks to [miuuyy/codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web), [mybolide/coding-tools-mcp](https://github.com/mybolide/coding-tools-mcp), [xyTom/coding-tools-mcp](https://github.com/xyTom/coding-tools-mcp), [Tauri](https://github.com/tauri-apps/tauri), [Svelte](https://github.com/sveltejs/svelte), and their contributors. Copyright 2026 Coding Tools MCP Contributors.
+
+Mnelyra is not affiliated with or endorsed by OpenAI, Anthropic, or Cloudflare.

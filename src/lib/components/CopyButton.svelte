@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from "svelte";
+  import { uiLocale } from "$lib/stores/locale";
 
   interface Props {
     value: string;
@@ -7,9 +8,11 @@
     onCopy?: () => void;
   }
 
-  let { value, label = "复制", onCopy }: Props = $props();
+  let { value, label, onCopy }: Props = $props();
   let copied = $state(false);
   let resetTimer: ReturnType<typeof setTimeout> | undefined;
+  const zh = $derived($uiLocale === "zh-CN");
+  const visibleLabel = $derived(label ?? (zh ? "复制" : "Copy"));
 
   onDestroy(() => {
     if (resetTimer !== undefined) clearTimeout(resetTimer);
@@ -32,5 +35,5 @@
   class="tx-btn-ghost shrink-0 px-2.5 py-1 text-xs"
   onclick={copy}
 >
-  {copied ? "已复制" : label}
+  {copied ? (zh ? "已复制" : "Copied") : visibleLabel}
 </button>

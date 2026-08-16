@@ -17,8 +17,14 @@ pub async fn set_global_general(
     if general.mcp_runtime.local_port == 0 {
         return Err(AppError::Message("MCP 端口不能为 0。".into()));
     }
-    if general.actions.local_port == 0 {
-        return Err(AppError::Message("Actions 端口不能为 0。".into()));
+    if !matches!(
+        general.permission_ceiling.as_str(),
+        "automatic" | "read_only" | "custom"
+    ) {
+        return Err(AppError::Message(format!(
+            "不支持的权限总阀门模式: {}",
+            general.permission_ceiling
+        )));
     }
 
     general.configured = true;
@@ -31,7 +37,14 @@ pub async fn set_global_general(
     })?;
 
     if !selected_id.trim().is_empty() {
-        crate::commands::runtime::activate_workspace_mcp(&state, &selected_id, true).await?;
+        crate::workspace::activation::activate_workspace_with_options(&state, &selected_id, true)
+            .await
+            .map_err(|error| AppError::Message(error.to_string()))?;
+        // Global MCP port changes invalidate Mode B's loopback target. If the
+        // connector is enabled, rebuild its owned runtime against the freshly
+        // verified authoritative listener instead of leaving a stale "ready"
+        // tunnel pointed at the old port.
+        crate::commands::auto_start_openai_connector(&state).await;
     }
     Ok(())
 }

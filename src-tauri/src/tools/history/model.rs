@@ -129,7 +129,25 @@ pub struct MemoryManifest {
     pub version: u32,
     pub archive_revision: String,
     #[serde(default)]
+    pub memory_revision: String,
+    #[serde(default)]
     pub entries: Vec<ManifestEntry>,
+    #[serde(default)]
+    pub provider_sources: Vec<ProviderMemorySource>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderMemorySource {
+    pub checkpoint_id: String,
+    pub path: String,
+    pub source_kind: String,
+    pub provider_id: String,
+    pub mnelyra_session_id: String,
+    pub provider_session_id: String,
+    #[serde(default)]
+    pub provider_turn_id: Option<String>,
+    pub captured_at: String,
+    pub content_sha256: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -144,6 +162,8 @@ pub struct MemoryState {
     pub version: u32,
     pub state_revision: u64,
     pub archive_revision: String,
+    #[serde(default)]
+    pub memory_revision: String,
     pub generated_at: String,
     pub current_session: Option<MemoryReference>,
     #[serde(default)]
@@ -154,6 +174,8 @@ pub struct MemoryState {
     pub open_items: Vec<String>,
     #[serde(default)]
     pub references: Vec<MemoryReference>,
+    #[serde(default)]
+    pub provider_sources: Vec<ProviderMemorySource>,
 }
 
 #[derive(Debug, Clone, Serialize)]

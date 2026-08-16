@@ -7,14 +7,20 @@
   import StatusOrb from "$lib/components/StatusOrb.svelte";
   import Tabs from "$lib/components/Tabs.svelte";
   import {
-    getActionsRuntimeStatus,
     getRuntimeStatus,
     listWorkspaces,
   } from "$lib/api/workspaces";
-  import { getGlobalGeneral, setLastWorkspace } from "$lib/api/settings";
-  import { actionsRuntimeStates, mcpRuntimeStates, workspaces } from "$lib/stores/app";
+  import { activateWorkspace, getWorkspaceActivity } from "$lib/api/activity";
+  import { getGlobalGeneral } from "$lib/api/settings";
   import {
-    actionsLocalEndpoint,
+    activeWorkspaceState,
+    mcpRuntimeStates,
+    workspaceActivity,
+    workspaces,
+  } from "$lib/stores/app";
+  import { uiLocale } from "$lib/stores/locale";
+  import { showToast } from "$lib/stores/toast";
+  import {
     mcpLocalEndpoint,
     type GlobalGeneralConfig,
     type RuntimeState,
@@ -22,42 +28,37 @@
     workspaceRootName,
   } from "$lib/types";
 
-  type ServiceTab = "mcp" | "actions";
   type DetailTab = "overview" | "logs" | "health";
 
   let profile = $state<WorkspaceProfile | null>(null);
   let general = $state<GlobalGeneralConfig | null>(null);
   let mcpStatus = $state<RuntimeState>("stopped");
-  let actionsStatus = $state<RuntimeState>("stopped");
   let mcpMessage = $state("");
-  let actionsMessage = $state("");
   let mcpLocal = $state("");
   let mcpPublic = $state("");
-  let actionsLocal = $state("");
-  let actionsPublic = $state("");
-  let activeService = $state<ServiceTab>("mcp");
   let detailTab = $state<DetailTab>("overview");
   let loadGeneration = 0;
+  const zh = $derived($uiLocale === "zh-CN");
 
   const workspaceId = $derived($page.params.id);
-  const detailTabs = [
-    { value: "overview", label: "概览" },
-    { value: "logs", label: "日志" },
-    { value: "health", label: "健康" },
-  ];
+  const detailTabs = $derived([
+    { value: "overview", label: zh ? "概览" : "Overview" },
+    { value: "logs", label: zh ? "日志" : "Logs" },
+    { value: "health", label: zh ? "健康" : "Health" },
+  ]);
 
   function stateLabel(state: RuntimeState): string {
     switch (state) {
       case "running":
-        return "运行中";
+        return zh ? "运行中" : "Running";
       case "starting":
-        return "启动中";
+        return zh ? "启动中" : "Starting";
       case "stopping":
-        return "停止中";
+        return zh ? "停止中" : "Stopping";
       case "error":
-        return "错误";
+        return zh ? "错误" : "Error";
       default:
-        return "未运行";
+        return zh ? "未运行" : "Stopped";
     }
   }
 
@@ -77,27 +78,30 @@
     profile = nextProfile;
     general = nextGeneral;
 
-    // Selecting a workspace is the switch operation: the backend stops any old
-    // MCP root and activates this project with the same global configuration.
-    await setLastWorkspace(id);
+    // Route selection is only UI selection. The backend transaction below owns
+    // authority and may keep the old root active if drain/start/verification fails.
+    try {
+      const active = await activateWorkspace(id);
+      activeWorkspaceState.set(active);
+      const activity = await getWorkspaceActivity(id);
+      workspaceActivity.update((current) => ({ ...current, [id]: activity }));
+    } catch (error) {
+      showToast(String(error), {
+        title: zh ? "工作区切换未完成" : "Workspace switch did not complete",
+        kind: "error",
+        duration: 9000,
+      });
+    }
     if (generation !== loadGeneration || id !== workspaceId) return;
 
-    const [mcp, actions] = await Promise.all([
-      getRuntimeStatus(id),
-      getActionsRuntimeStatus(id),
-    ]);
+    const mcp = await getRuntimeStatus(id);
     if (generation !== loadGeneration || id !== workspaceId) return;
 
     mcpStatus = mcp.state;
     mcpMessage = mcp.localMessage ?? "";
     mcpLocal = mcp.localEndpoint;
     mcpPublic = mcp.publicEndpoint;
-    actionsStatus = actions.state;
-    actionsMessage = actions.localMessage ?? "";
-    actionsLocal = actions.localEndpoint;
-    actionsPublic = actions.publicEndpoint;
     mcpRuntimeStates.update((current) => ({ ...current, [id]: mcp.state }));
-    actionsRuntimeStates.update((current) => ({ ...current, [id]: actions.state }));
   }
 
   $effect(() => {
@@ -116,32 +120,17 @@
   <section class="page-scroll">
     <header class="page-header">
       <div>
-        <p class="page-kicker">PROJECT ROOT</p>
+        <p class="page-kicker">{zh ? "工作区" : "WORKSPACE"}</p>
         <h2 class="page-title">{workspaceRootName(profile.path)}</h2>
         <p class="tx-project-path" title={profile.path}>{profile.path}</p>
       </div>
 
-      <div class="mt-4 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          class="tx-status-pill"
-          class:active={activeService === "mcp"}
-          onclick={() => (activeService = "mcp")}
-        >
+      <div class="mn-workspace-service-switcher">
+        <div class="tx-status-pill active">
           <StatusOrb state={mcpStatus} />
-          <span class="font-medium">MCP</span>
-          <span class="text-[var(--color-text-muted)]">{stateLabel(mcpStatus)}</span>
-        </button>
-        <button
-          type="button"
-          class="tx-status-pill"
-          class:active={activeService === "actions"}
-          onclick={() => (activeService = "actions")}
-        >
-          <StatusOrb state={actionsStatus} />
-          <span class="font-medium">Actions</span>
-          <span class="text-[var(--color-text-muted)]">{stateLabel(actionsStatus)}</span>
-        </button>
+          <span>MCP</span>
+          <strong>{stateLabel(mcpStatus)}</strong>
+        </div>
       </div>
     </header>
 
@@ -155,44 +144,21 @@
       </div>
 
       {#if detailTab === "overview"}
-        {#if activeService === "mcp"}
-          <ServicePanel
-            title="MCP"
-            subtitle="当前项目根目录 Streamable HTTP 工具运行时"
-            status={mcpStatus}
-            statusMessage={mcpMessage}
-            port={general.mcpRuntime.local_port}
-            portEditable={false}
-            tunnelType={general.mcpTunnel.type}
-            localEndpoint={mcpLocal || mcpLocalEndpoint(general.mcpRuntime.local_port)}
-            publicEndpoint={mcpPublic}
-            publicLabel="公网 MCP"
-            showToggle={false}
-          />
-        {:else}
-          <ServicePanel
-            title="Actions"
-            subtitle="当前项目根目录 OpenAPI 网关"
-            status={actionsStatus}
-            statusMessage={actionsMessage}
-            port={general.actions.local_port}
-            portEditable={false}
-            tunnelType={general.actions.tunnel_type}
-            localEndpoint={actionsLocal || actionsLocalEndpoint(general.actions.local_port)}
-            publicEndpoint={actionsPublic}
-            publicLabel="公网 Actions"
-            showToggle={false}
-          />
-        {/if}
-
-        <div class="tx-card mt-4 p-4">
-          <p class="tx-section-label">运行模型</p>
-          <p class="mt-2 text-sm text-[var(--color-text-muted)]">
-            端口、隧道、认证与执行策略均来自全局设置。切换左侧工作区时只切换 MCP 的代码根目录，不生成新的 OAuth Client ID，也不复制一套服务配置。
-          </p>
-        </div>
+        <ServicePanel
+          title="MCP"
+          subtitle={zh ? "当前工作区的 Streamable HTTP 工具运行时" : "Streamable HTTP tool runtime for this workspace"}
+          status={mcpStatus}
+          statusMessage={mcpMessage}
+          port={general.mcpRuntime.local_port}
+          portEditable={false}
+          tunnelType={general.mcpTunnel.type}
+          localEndpoint={mcpLocal || mcpLocalEndpoint(general.mcpRuntime.local_port)}
+          publicEndpoint={mcpPublic}
+          publicLabel={zh ? "公网 MCP" : "Public MCP"}
+          showToggle={false}
+        />
       {:else if detailTab === "logs"}
-        <LogViewer workspaceId={workspaceId!} service={activeService} />
+        <LogViewer workspaceId={workspaceId!} service="mcp" />
       {:else}
         <HealthPanel workspaceId={workspaceId!} />
       {/if}

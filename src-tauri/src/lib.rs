@@ -1,6 +1,6 @@
 #![cfg_attr(target_os = "windows", allow(linker_messages))]
 
-mod actions;
+mod activity;
 mod app_state;
 mod auth;
 mod commands;
@@ -10,8 +10,10 @@ pub mod harness;
 mod health;
 mod mcp;
 mod platform;
+mod provider;
 mod runtime;
 mod secret;
+mod session;
 mod settings;
 pub mod tools;
 mod tunnel;
@@ -20,17 +22,23 @@ mod workspace;
 
 use app_state::AppState;
 use commands::{
-    check_app_update, create_workspace, delete_frp_profile, delete_workspace,
-    get_actions_runtime_status, get_app_settings, get_download_config, get_frp_snippet,
-    get_global_auth, get_global_general, get_last_workspace_id,get_runtime_status,
-    get_shared_secret, get_webview_memory_sample, get_workspace_secret, hide_to_tray,
-    install_software, list_frp_profiles, list_software, list_workspaces, open_url,
-    open_workspace_directory, quit_app, read_workspace_logs, recreate_ui_webview,
-    regenerate_shared_secret, regenerate_workspace_secret, restart_actions_runtime,
-    restart_runtime, restart_tunnel, run_health_checks, save_frp_profile, set_download_config,
-    set_global_auth, set_global_general, set_last_workspace,set_shared_secret,
-    set_workspace_secret, show_main_window, start_actions_runtime, start_runtime, start_tunnel,
-    stop_actions_runtime, stop_runtime, stop_tunnel, test_tunnel, uninstall_software,
+    activate_workspace, can_switch_workspace, cancel_session, check_app_update, compact_session,
+    create_workspace, delete_frp_profile, delete_workspace, get_active_workspace_state,
+    get_app_settings, get_codex_context_policy, get_download_config, get_frp_snippet,
+    get_global_auth, get_global_general, get_last_workspace_id, get_openai_connector_settings,
+    get_openai_connector_status, get_pending_session_requests, get_provider_checkpoint,
+    get_provider_status, get_runtime_status, get_session_event_page, get_session_events,
+    get_shared_secret, get_webview_memory_sample, get_workspace_activity,
+    get_workspace_memory_overview, get_workspace_secret, hide_to_tray,
+    install_openai_tunnel_client, install_software, list_frp_profiles, list_providers,
+    list_sessions, list_software, list_workspaces, open_url, open_workspace_directory, quit_app,
+    read_workspace_logs, recreate_ui_webview, regenerate_shared_secret,
+    regenerate_workspace_secret, respond_session_request, restart_runtime, restart_tunnel,
+    run_health_checks, save_frp_profile, save_openai_connector_settings, send_session_input,
+    set_codex_auto_compact_limit, set_download_config, set_global_auth, set_global_general,
+    set_last_workspace, set_permission_ceiling, set_shared_secret, set_workspace_secret,
+    show_main_window, start_openai_connector, start_provider_task, start_runtime, start_tunnel,
+    stop_openai_connector, stop_runtime, stop_tunnel, test_tunnel, uninstall_software,
     update_workspace,
 };
 use tauri::menu::{Menu, MenuItem};
@@ -39,31 +47,41 @@ use tauri::{Emitter, Manager, WindowEvent};
 
 #[cfg(target_os = "windows")]
 fn signal_existing_instance() -> bool {
-    use windows::core::w;
-    use windows::Win32::Foundation::{CloseHandle, HANDLE, GetLastError, ERROR_ALREADY_EXISTS};
+    use windows::core::PCWSTR;
+    use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS, HANDLE};
     use windows::Win32::System::Threading::{
         CreateEventW, CreateMutexW, OpenEventW, SetEvent, EVENT_MODIFY_STATE,
     };
 
-    let Ok(mutex) = (unsafe {
-        CreateMutexW(
-            None,
-            false,
-            w!("Local\\WebCodexDesktop-SingleInstance"),
+    let isolated = std::env::var_os("MNELYRA_DATA_DIR")
+        .map(std::path::PathBuf::from)
+        .is_some_and(|path| path.is_absolute());
+    let (mutex_name, event_name) = if isolated {
+        (
+            "Local\\Mnelyra-IsolatedDev-SingleInstance",
+            "Local\\Mnelyra-IsolatedDev-ShowWindow",
         )
-    }) else {
+    } else {
+        ("Local\\Mnelyra-SingleInstance", "Local\\Mnelyra-ShowWindow")
+    };
+    let mutex_wide = mutex_name
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let event_wide = event_name
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+
+    let Ok(mutex) = (unsafe { CreateMutexW(None, false, PCWSTR(mutex_wide.as_ptr())) }) else {
         eprintln!("创建应用单实例锁失败，为避免误清理其他实例的 frpc，本次启动已取消");
         return false;
     };
     if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
         let _ = unsafe { CloseHandle(mutex) };
-        if let Ok(event) = unsafe {
-            OpenEventW(
-                EVENT_MODIFY_STATE,
-                false,
-                w!("Local\\WebCodexDesktop-ShowWindow"),
-            )
-        } {
+        if let Ok(event) =
+            unsafe { OpenEventW(EVENT_MODIFY_STATE, false, PCWSTR(event_wide.as_ptr())) }
+        {
             let _ = unsafe { SetEvent(event) };
             let _ = unsafe { CloseHandle(event) };
         }
@@ -73,14 +91,8 @@ fn signal_existing_instance() -> bool {
     // Keep mutex handle for process lifetime (do not CloseHandle).
     let _ = INSTANCE_MUTEX.set(mutex.0 as usize);
 
-    let Ok(event) = (unsafe {
-        CreateEventW(
-            None,
-            false,
-            false,
-            w!("Local\\WebCodexDesktop-ShowWindow"),
-        )
-    }) else {
+    let Ok(event) = (unsafe { CreateEventW(None, false, false, PCWSTR(event_wide.as_ptr())) })
+    else {
         return true;
     };
     // Pass the handle as usize so the waiter thread is Send (HANDLE is !Send).
@@ -121,7 +133,7 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
 
     let mut builder = TrayIconBuilder::with_id("main-tray")
         .menu(&menu)
-        .tooltip("RootRelay")
+        .tooltip("Mnelyra")
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
                 let _ = commands::window_chrome::show_main_window(app.clone());
@@ -192,6 +204,7 @@ pub fn run() {
                 }
 
                 commands::runtime::auto_start_configured_mcp(state.inner()).await;
+                commands::auto_start_openai_connector(state.inner()).await;
 
                 // Complete the self-contained installation in the background
                 // only after the active MCP has had its chance to come online.
@@ -214,6 +227,32 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            get_active_workspace_state,
+            get_workspace_activity,
+            can_switch_workspace,
+            activate_workspace,
+            list_providers,
+            get_provider_status,
+            get_codex_context_policy,
+            set_codex_auto_compact_limit,
+            set_permission_ceiling,
+            get_openai_connector_settings,
+            save_openai_connector_settings,
+            get_openai_connector_status,
+            install_openai_tunnel_client,
+            start_openai_connector,
+            stop_openai_connector,
+            list_sessions,
+            get_workspace_memory_overview,
+            get_provider_checkpoint,
+            start_provider_task,
+            send_session_input,
+            cancel_session,
+            compact_session,
+            get_session_events,
+            get_session_event_page,
+            get_pending_session_requests,
+            respond_session_request,
             list_workspaces,
             create_workspace,
             update_workspace,
@@ -224,11 +263,7 @@ pub fn run() {
             start_runtime,
             stop_runtime,
             get_runtime_status,
-            start_actions_runtime,
-            stop_actions_runtime,
-            get_actions_runtime_status,
             restart_runtime,
-            restart_actions_runtime,
             get_frp_snippet,
             start_tunnel,
             stop_tunnel,

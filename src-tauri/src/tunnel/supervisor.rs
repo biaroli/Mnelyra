@@ -16,14 +16,12 @@ use super::frp::{self, FrpServerConfig};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TunnelServiceKind {
     Mcp,
-    Actions,
 }
 
 impl TunnelServiceKind {
     pub fn parse(service: &str) -> AppResult<Self> {
         match service.to_ascii_lowercase().as_str() {
             "mcp" => Ok(Self::Mcp),
-            "actions" => Ok(Self::Actions),
             other => Err(AppError::Message(format!(
                 "unknown tunnel service: {other}"
             ))),
@@ -93,7 +91,7 @@ impl TunnelSupervisor {
         let workspace_ids: Vec<String> = self.frpc.keys().cloned().collect();
         let mut restarted = 0usize;
         for workspace_id in workspace_ids {
-            let Some(reason) = self.diagnose_frpc_unhealthy(&workspace_id, settings).await else {
+            let Some(reason) = self.diagnose_frpc_unhealthy(&workspace_id).await else {
                 if let Some(state) = self.frpc_health.get_mut(&workspace_id) {
                     state.unhealthy_streak = 0;
                 }
@@ -135,11 +133,7 @@ impl TunnelSupervisor {
         restarted
     }
 
-    async fn diagnose_frpc_unhealthy(
-        &self,
-        workspace_id: &str,
-        settings: &AppSettings,
-    ) -> Option<String> {
+    async fn diagnose_frpc_unhealthy(&self, workspace_id: &str) -> Option<String> {
         let process_alive = self.frpc.get(workspace_id).is_some_and(|process| {
             process
                 .pid
@@ -160,12 +154,7 @@ impl TunnelSupervisor {
             return None;
         }
 
-        // Prefer MCP log; fall back to Actions log if MCP route absent.
-        let log_kind = if routes.iter().any(|r| r.kind == TunnelServiceKind::Mcp) {
-            TunnelServiceKind::Mcp
-        } else {
-            TunnelServiceKind::Actions
-        };
+        let log_kind = TunnelServiceKind::Mcp;
         let log_path = log_dir_for_profile(workspace_id).join(frp::frpc_log_name(log_kind));
         let log_tail = frp::read_frpc_log_tail(&log_path);
         if frp::frpc_reconnect_loop_detected(&log_tail) {
@@ -175,14 +164,6 @@ impl TunnelSupervisor {
         for route in routes {
             let public_url = match route.kind {
                 TunnelServiceKind::Mcp => route.profile.public_endpoint(),
-                TunnelServiceKind::Actions => {
-                    let base = route.profile.actions_effective_public_url_with(settings);
-                    if base.is_empty() {
-                        String::new()
-                    } else {
-                        format!("{}/openapi.json", base.trim_end_matches('/'))
-                    }
-                }
             };
             if public_url.is_empty() {
                 continue;
@@ -190,13 +171,13 @@ impl TunnelSupervisor {
             // Only treat FRP's own 404 page as proof the proxy is dead. Network
             // blips (Unreachable) alone must not force a restart.
             if matches!(route.kind, TunnelServiceKind::Mcp) {
-                let local_ok =
-                    frp::probe_local_mcp_ok(route.profile.runtime.local_port).await;
+                let local_ok = frp::probe_local_mcp_ok(route.profile.runtime.local_port).await;
                 if !local_ok {
                     continue;
                 }
             }
-            if frp::probe_public_mcp_endpoint(&public_url).await == frp::PublicMcpProbe::FrpNotRouted
+            if frp::probe_public_mcp_endpoint(&public_url).await
+                == frp::PublicMcpProbe::FrpNotRouted
             {
                 return Some(format!(
                     "public endpoint returns FRP not-found page ({public_url})"
@@ -511,10 +492,7 @@ impl TunnelSupervisor {
 
     pub async fn drop_workspace(&mut self, workspace_id: &str) -> AppResult<()> {
         let settings = AppSettings::load_or_default();
-        let keys = [
-            (workspace_id.to_string(), TunnelServiceKind::Mcp),
-            (workspace_id.to_string(), TunnelServiceKind::Actions),
-        ];
+        let keys = [(workspace_id.to_string(), TunnelServiceKind::Mcp)];
 
         // 非 FRP session 正常情况下必须持有 Child。先完成归属预检，再修改
         // FRP route；不能确认归属时保持所有线路原样，避免部分删除。
@@ -608,7 +586,7 @@ impl TunnelSupervisor {
     ) {
         let mut changed_workspaces = HashSet::new();
         for profile in profiles {
-            for kind in [TunnelServiceKind::Mcp, TunnelServiceKind::Actions] {
+            for kind in [TunnelServiceKind::Mcp] {
                 let key = (profile.id.clone(), kind);
                 if tunnel_type_for(profile, kind) != "frp" || !active_runtime_keys.contains(&key) {
                     continue;
@@ -642,7 +620,7 @@ impl TunnelSupervisor {
 
     fn validate_frp_route_compatibility(
         &self,
-        workspace_id: &str,
+        _workspace_id: &str,
         config: &FrpServerConfig,
         settings: &AppSettings,
     ) -> AppResult<()> {
@@ -662,24 +640,6 @@ impl TunnelSupervisor {
             )));
         }
 
-        let Some(existing) = self
-            .frp_routes
-            .iter()
-            .find(|((route_workspace_id, _), _)| route_workspace_id == workspace_id)
-            .map(|(_, route)| route)
-        else {
-            return Ok(());
-        };
-        let existing_config =
-            frp::frp_server_config(&existing.profile, existing.kind, settings, None);
-        let same_connection = existing_config.server_addr.trim() == config.server_addr.trim()
-            && existing_config.server_port == config.server_port
-            && existing_config.token == config.token;
-        if !same_connection {
-            return Err(AppError::Message(
-                "同一工作区的 MCP 与 Actions 必须使用同一 FRP 服务器、端口和 Token。".into(),
-            ));
-        }
         Ok(())
     }
 
@@ -890,14 +850,12 @@ fn proxy_already_exists(error: &AppError) -> bool {
 fn tunnel_type_for(profile: &WorkspaceProfile, kind: TunnelServiceKind) -> &str {
     match kind {
         TunnelServiceKind::Mcp => profile.tunnel.tunnel_type.as_str(),
-        TunnelServiceKind::Actions => profile.actions.tunnel_type.as_str(),
     }
 }
 
 fn tunnel_service_label(kind: TunnelServiceKind) -> &'static str {
     match kind {
         TunnelServiceKind::Mcp => "MCP",
-        TunnelServiceKind::Actions => "Actions",
     }
 }
 
@@ -908,7 +866,6 @@ fn public_url_for_profile(
 ) -> String {
     match kind {
         TunnelServiceKind::Mcp => profile.effective_public_url_with(settings),
-        TunnelServiceKind::Actions => profile.actions_effective_public_url_with(settings),
     }
 }
 
@@ -925,12 +882,6 @@ fn validate_tunnel_requirements(
                 profile.tunnel.frp_server.as_str(),
                 profile.tunnel.frp_subdomain.as_str(),
                 profile.tunnel.frp_server_port,
-            ),
-            TunnelServiceKind::Actions => (
-                profile.actions.frp_profile_id.as_str(),
-                profile.actions.frp_server.as_str(),
-                profile.actions.frp_subdomain.as_str(),
-                profile.actions.frp_server_port,
             ),
         };
         let server = resolve_frp_server(profile_id, server, settings);
@@ -959,11 +910,6 @@ fn validate_tunnel_requirements(
             SecretStore::get_shared("cloudflare_token")?.unwrap_or_default(),
             profile.tunnel.public_url.clone(),
         ),
-        TunnelServiceKind::Actions => (
-            profile.actions.cloudflare_mode.as_str(),
-            SecretStore::get_shared("actions_cloudflare_token")?.unwrap_or_default(),
-            profile.actions.public_url.clone(),
-        ),
     };
 
     if mode == "named" {
@@ -983,7 +929,10 @@ fn validate_tunnel_requirements(
                 "Cloudflare 命名隧道的固定公网地址必须使用 https://。".into(),
             ));
         }
-        if named_url.to_ascii_lowercase().contains(".trycloudflare.com") {
+        if named_url
+            .to_ascii_lowercase()
+            .contains(".trycloudflare.com")
+        {
             return Err(AppError::Message(
                 "Named Tunnel 不能使用 trycloudflare.com 临时地址；请填写绑定到该 Tunnel 的固定域名。"
                     .into(),
@@ -1014,16 +963,6 @@ fn cloudflare_config(
                 token,
                 profile.tunnel.public_url.clone(),
                 "cloudflared.log",
-            ))
-        }
-        TunnelServiceKind::Actions => {
-            let token = SecretStore::get_shared("actions_cloudflare_token")?.unwrap_or_default();
-            Ok((
-                profile.actions.local_port,
-                profile.actions.cloudflare_mode.as_str(),
-                token,
-                profile.actions.public_url.clone(),
-                "actions-cloudflared.log",
             ))
         }
     }
@@ -1178,41 +1117,6 @@ mod tests {
                 .get(&(second.id.clone(), TunnelServiceKind::Mcp))
                 .map(|session| session.public_url.as_str()),
             Some("https://lb.frp.example.com")
-        );
-    }
-
-    #[test]
-    fn sync_frp_sessions_removes_stale_frp_entries_and_updates_urls() {
-        let settings = AppSettings::default();
-        let current = frp_profile("demo", "new-subdomain");
-        let current_key = (current.id.clone(), TunnelServiceKind::Mcp);
-        let stale_key = (current_key.0.clone(), TunnelServiceKind::Actions);
-        let mut supervisor = TunnelSupervisor::new();
-        supervisor.frp_routes.insert(
-            current_key.clone(),
-            FrpRoute {
-                profile: current,
-                kind: TunnelServiceKind::Mcp,
-            },
-        );
-        supervisor.sessions.insert(
-            stale_key,
-            TunnelSession {
-                public_url: "https://old.frp.example.com".into(),
-                pid: Some(1),
-                child: None,
-            },
-        );
-
-        supervisor.sync_frp_sessions_for_workspace(&settings, &current_key.0, Some(42));
-
-        assert_eq!(supervisor.sessions.len(), 1);
-        assert_eq!(
-            supervisor
-                .sessions
-                .get(&current_key)
-                .map(|session| (session.public_url.as_str(), session.pid)),
-            Some(("https://new-subdomain.frp.example.com", Some(42)))
         );
     }
 

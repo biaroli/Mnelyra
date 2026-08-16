@@ -4,9 +4,8 @@ use std::path::{Component, Path};
 use serde_json::Value;
 
 use crate::tools::workspace::Workspace;
-use crate::workspace::ActionsConfig;
 
-use super::registry::is_allowed_tool;
+use super::registry::is_read_only_tool;
 
 static NETWORK_COMMAND_PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
 static DANGEROUS_COMMAND_PATTERN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
@@ -60,6 +59,7 @@ pub struct PolicySettings {
     pub workspace_script_extensions: HashSet<String>,
     pub max_patch_bytes: usize,
     pub permission_mode: String,
+    pub permission_ceiling: String,
 }
 
 impl Default for PolicySettings {
@@ -70,6 +70,7 @@ impl Default for PolicySettings {
             workspace_script_extensions: default_workspace_script_extension_set(),
             max_patch_bytes: 200_000,
             permission_mode: "trusted".into(),
+            permission_ceiling: "automatic".into(),
         }
     }
 }
@@ -84,26 +85,38 @@ impl PolicySettings {
             ),
             max_patch_bytes: 200_000,
             permission_mode: runtime.permission_mode.clone(),
+            permission_ceiling: "automatic".into(),
         }
     }
 
-    pub fn from_actions_config(actions: &ActionsConfig) -> Self {
-        Self {
-            allowed_commands: merge_default_allowed_commands(&actions.allowed_commands),
-            workspace_local_entries: true,
-            workspace_script_extensions: default_workspace_script_extension_set(),
-            max_patch_bytes: actions.max_patch_bytes as usize,
-            permission_mode: actions.permission_mode.clone(),
-        }
+    pub fn with_permission_ceiling(mut self, ceiling: &str) -> Self {
+        self.permission_ceiling = normalize_permission_ceiling(ceiling).to_string();
+        self
     }
 
     pub fn network_allowed(&self) -> bool {
-        self.permission_mode == "trusted" || self.permission_mode == "dangerous"
+        match normalize_permission_ceiling(&self.permission_ceiling) {
+            "read_only" => false,
+            "custom" => true,
+            _ => self.permission_mode == "trusted" || self.permission_mode == "dangerous",
+        }
     }
 
     pub fn skip_permission_gates(&self) -> bool {
-        self.permission_mode == "dangerous"
+        self.permission_mode == "dangerous" && self.permission_ceiling != "read_only"
     }
+}
+
+pub fn normalize_permission_ceiling(value: &str) -> &'static str {
+    match value {
+        "read_only" => "read_only",
+        "custom" => "custom",
+        _ => "automatic",
+    }
+}
+
+pub fn ceiling_allows_tool(ceiling: &str, tool_name: &str) -> bool {
+    normalize_permission_ceiling(ceiling) != "read_only" || is_read_only_tool(tool_name)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -180,19 +193,15 @@ pub fn validate_tool_arguments_for_workspace(
     policy: &PolicySettings,
     workspace: Option<&Workspace>,
 ) -> Result<(), PolicyError> {
+    if !ceiling_allows_tool(&policy.permission_ceiling, tool_name) {
+        return Err(PolicyError(format!(
+            "MASTER_PERMISSION_READ_ONLY: {tool_name} is blocked by the Mnelyra read-only ceiling"
+        )));
+    }
     match tool_name {
         "exec_command" => validate_command_for_workspace(arguments, policy, workspace),
         "apply_patch" | "patch_check" => validate_patch(arguments, policy),
         _ => Ok(()),
-    }
-}
-
-/// Actions OpenAPI 暴露层校验：仅限制「能否调用」，不参与执行逻辑。
-pub fn validate_actions_exposure(tool_name: &str) -> Result<(), PolicyError> {
-    if is_allowed_tool(tool_name) {
-        Ok(())
-    } else {
-        Err(PolicyError(format!("Tool is not exposed: {tool_name}")))
     }
 }
 
@@ -494,11 +503,11 @@ mod tests {
 
     #[test]
     fn workspace_allowed_commands_override_defaults() {
-        let actions = ActionsConfig {
+        let runtime = crate::workspace::RuntimeConfig {
             allowed_commands: "cargo,go".into(),
-            ..ActionsConfig::default()
+            ..crate::workspace::RuntimeConfig::default()
         };
-        let policy = PolicySettings::from_actions_config(&actions);
+        let policy = PolicySettings::from_runtime(&runtime);
         assert!(policy.allowed_commands.contains("cargo"));
         assert!(policy.allowed_commands.contains("pytest"));
     }
@@ -535,11 +544,10 @@ mod tests {
 
     #[test]
     fn patch_size_uses_workspace_limit() {
-        let actions = ActionsConfig {
+        let policy = PolicySettings {
             max_patch_bytes: 10,
-            ..ActionsConfig::default()
+            ..PolicySettings::default()
         };
-        let policy = PolicySettings::from_actions_config(&actions);
         let err = validate_patch(&json!({ "patch": "01234567890" }), &policy).unwrap_err();
         assert!(err.0.contains("too large"));
     }
@@ -555,13 +563,55 @@ mod tests {
 
     #[test]
     fn configured_commands_keep_basic_diagnostics() {
-        let actions = ActionsConfig {
+        let runtime = crate::workspace::RuntimeConfig {
             allowed_commands: "cargo,go".into(),
-            ..ActionsConfig::default()
+            ..crate::workspace::RuntimeConfig::default()
         };
-        let policy = PolicySettings::from_actions_config(&actions);
+        let policy = PolicySettings::from_runtime(&runtime);
         assert!(validate_command(&json!({"cmd": "pwd"}), &policy).is_ok());
         assert!(validate_command(&json!({"cmd": "pytest"}), &policy).is_ok());
+    }
+
+    #[test]
+    fn read_only_ceiling_blocks_mutating_tools_but_keeps_reads() {
+        let policy = PolicySettings::default().with_permission_ceiling("read_only");
+        assert!(!ceiling_allows_tool(
+            &policy.permission_ceiling,
+            "exec_command"
+        ));
+        assert!(!ceiling_allows_tool(
+            &policy.permission_ceiling,
+            "apply_patch"
+        ));
+        assert!(ceiling_allows_tool(&policy.permission_ceiling, "read_file"));
+        assert!(validate_tool_arguments_for_workspace(
+            "exec_command",
+            &json!({"cmd": "pwd"}),
+            &policy,
+            None,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn custom_ceiling_enables_network_without_disabling_workspace_policy() {
+        let mut policy = PolicySettings::default().with_permission_ceiling("custom");
+        policy.permission_mode = "safe".into();
+        assert!(policy.network_allowed());
+        assert!(ceiling_allows_tool(
+            &policy.permission_ceiling,
+            "exec_command"
+        ));
+        assert!(!policy.skip_permission_gates());
+    }
+
+    #[test]
+    fn automatic_ceiling_preserves_downstream_network_policy() {
+        let mut policy = PolicySettings::default().with_permission_ceiling("automatic");
+        policy.permission_mode = "safe".into();
+        assert!(!policy.network_allowed());
+        policy.permission_mode = "trusted".into();
+        assert!(policy.network_allowed());
     }
 
     #[test]

@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use tauri::async_runtime::JoinHandle;
 
-use crate::actions;
+use crate::activity::ActivityCoordinator;
 use crate::error::AppResult;
 use crate::mcp;
 use crate::platform::platform;
@@ -13,14 +13,13 @@ use crate::runtime::port::{
     wait_for_port_free_blocking,
 };
 use crate::secret::SecretStore;
-use crate::tools::policy::PolicySettings;
+use crate::session::SessionCoordinator;
 use crate::tunnel::{append_profile_log, cleanup_orphan_for_runtime, TunnelServiceKind};
 use crate::workspace::{RuntimeStatusDto, WorkspaceProfile};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ServiceKind {
     Mcp,
-    Actions,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,26 +50,25 @@ impl RuntimeSupervisor {
         self.status(profile, ServiceKind::Mcp)
     }
 
-    pub fn actions_status(&self, profile: &WorkspaceProfile) -> RuntimeStatusDto {
-        self.status(profile, ServiceKind::Actions)
-    }
-
-    pub fn start_mcp(&mut self, profile: &WorkspaceProfile) -> AppResult<RuntimeStatusDto> {
-        self.start(profile, ServiceKind::Mcp)
-    }
-
-    pub fn start_actions(&mut self, profile: &WorkspaceProfile) -> AppResult<RuntimeStatusDto> {
-        self.start(profile, ServiceKind::Actions)
+    pub fn start_mcp_with_activity(
+        &mut self,
+        profile: &WorkspaceProfile,
+        activity: ActivityCoordinator,
+        session_coordinator: SessionCoordinator,
+        permission_ceiling: &str,
+    ) -> AppResult<RuntimeStatusDto> {
+        self.start(
+            profile,
+            ServiceKind::Mcp,
+            Some(activity),
+            Some(session_coordinator),
+            permission_ceiling,
+        )
     }
 
     #[allow(dead_code)] // Kept for sync callers (tests / teardown helpers).
     pub fn restart_mcp(&mut self, profile: &WorkspaceProfile) -> AppResult<RuntimeStatusDto> {
         self.restart(profile, ServiceKind::Mcp)
-    }
-
-    #[allow(dead_code)] // Kept for sync callers (tests / teardown helpers).
-    pub fn restart_actions(&mut self, profile: &WorkspaceProfile) -> AppResult<RuntimeStatusDto> {
-        self.restart(profile, ServiceKind::Actions)
     }
 
     /// True when the service for this workspace is currently running.
@@ -101,13 +99,8 @@ impl RuntimeSupervisor {
         self.refresh(profile, ServiceKind::Mcp);
     }
 
-    pub fn refresh_actions(&mut self, profile: &WorkspaceProfile) {
-        self.refresh(profile, ServiceKind::Actions);
-    }
-
     pub fn drop_workspace(&mut self, profile: &WorkspaceProfile) {
         self.sync_stop_and_wait(profile, ServiceKind::Mcp);
-        self.sync_stop_and_wait(profile, ServiceKind::Actions);
     }
 
     pub fn active_tunnel_service_keys(&self) -> HashSet<(String, TunnelServiceKind)> {
@@ -118,7 +111,6 @@ impl RuntimeSupervisor {
                     workspace_id.clone(),
                     match kind {
                         ServiceKind::Mcp => TunnelServiceKind::Mcp,
-                        ServiceKind::Actions => TunnelServiceKind::Actions,
                     },
                 )),
                 _ => None,
@@ -210,6 +202,9 @@ impl RuntimeSupervisor {
         &mut self,
         profile: &WorkspaceProfile,
         kind: ServiceKind,
+        activity: Option<ActivityCoordinator>,
+        session_coordinator: Option<SessionCoordinator>,
+        permission_ceiling: &str,
     ) -> AppResult<RuntimeStatusDto> {
         let key = (profile.id.clone(), kind);
         if matches!(
@@ -270,11 +265,8 @@ impl RuntimeSupervisor {
                         auth.oauth_client_id = client_id;
                     }
                 }
-                // MCP OAuth matches legacy Python: client_secret is optional.
-                // PKCE-only MCP clients do not send client_secret.
-                let oauth_client_secret = None;
-                let oauth_password = if profile.auth.oauth_enabled() {
-                    resolve_secret(&profile.id, "oauth_password", use_shared)?
+                let oauth_client_secret = if profile.auth.oauth_enabled() {
+                    resolve_secret(&profile.id, "oauth_client_secret", use_shared)?
                 } else {
                     None
                 };
@@ -290,66 +282,15 @@ impl RuntimeSupervisor {
                     auth,
                     profile.effective_public_url(),
                     oauth_client_secret,
-                    oauth_password,
                     oauth_token_secret,
                     profile.runtime.clone(),
-                )
-            }
-            ServiceKind::Actions => {
-                let auth_type = profile.actions.auth_type.clone();
-                let use_shared = profile.actions.use_shared_secrets;
-                let api_key = if auth_type == "api_key" {
-                    resolve_secret(&profile.id, "actions_api_key", use_shared)?
-                } else {
-                    None
-                };
-                let oauth_client_secret = if auth_type == "oauth" {
-                    if use_shared {
-                        resolve_secret(&profile.id, "actions_oauth_client_secret", true)?
-                    } else {
-                        Some(actions_oauth_secret(
-                            &profile.id,
-                            "actions_oauth_client_secret",
-                        )?)
-                    }
-                } else {
-                    None
-                };
-                let oauth_password = if auth_type == "oauth" {
-                    if use_shared {
-                        resolve_secret(&profile.id, "actions_oauth_password", true)?
-                    } else {
-                        Some(actions_oauth_secret(&profile.id, "actions_oauth_password")?)
-                    }
-                } else {
-                    None
-                };
-                let oauth_token_secret = if auth_type == "oauth" {
-                    if use_shared {
-                        resolve_secret(&profile.id, "actions_oauth_token_secret", true)?
-                    } else {
-                        Some(actions_oauth_secret(
-                            &profile.id,
-                            "actions_oauth_token_secret",
-                        )?)
-                    }
-                } else {
-                    None
-                };
-                let public_base_url = profile.actions_public_base_url();
-                let policy = PolicySettings::from_actions_config(&profile.actions);
-                actions::spawn_listener(
-                    &profile.id,
-                    port,
-                    PathBuf::from(&profile.path),
-                    public_base_url,
-                    auth_type,
-                    api_key,
-                    profile.actions.oauth_client_id.clone(),
-                    oauth_client_secret,
-                    oauth_password,
-                    oauth_token_secret,
-                    policy,
+                    permission_ceiling.to_string(),
+                    activity.clone().unwrap_or_default(),
+                    session_coordinator.clone().ok_or_else(|| {
+                        crate::error::AppError::Message(
+                            "Mnelyra session coordinator unavailable".into(),
+                        )
+                    })?,
                 )
             }
         };
@@ -415,7 +356,7 @@ impl RuntimeSupervisor {
         kind: ServiceKind,
     ) -> AppResult<RuntimeStatusDto> {
         self.sync_stop_and_wait(profile, kind);
-        self.start(profile, kind)
+        self.start(profile, kind, None, None, "automatic")
     }
 
     fn sync_stop_and_wait(&mut self, profile: &WorkspaceProfile, kind: ServiceKind) {
@@ -496,7 +437,6 @@ impl RuntimeSupervisor {
 
         let tunnel_kind = match kind {
             ServiceKind::Mcp => TunnelServiceKind::Mcp,
-            ServiceKind::Actions => TunnelServiceKind::Actions,
         };
 
         let profile = profile.clone();
@@ -532,38 +472,30 @@ fn should_mark_runtime_error(entry: &mut RuntimeEntry, listening: bool) -> bool 
 fn port_for(profile: &WorkspaceProfile, kind: ServiceKind) -> u16 {
     match kind {
         ServiceKind::Mcp => profile.runtime.local_port,
-        ServiceKind::Actions => profile.actions.local_port,
     }
 }
 
 fn endpoints(profile: &WorkspaceProfile, kind: ServiceKind) -> (String, String) {
     match kind {
         ServiceKind::Mcp => (profile.local_endpoint(), profile.public_endpoint()),
-        ServiceKind::Actions => (
-            profile.actions_local_base_url(),
-            profile.actions_openapi_url(),
-        ),
     }
 }
 
 fn public_message_for(profile: &WorkspaceProfile, kind: ServiceKind) -> String {
     match kind {
         ServiceKind::Mcp => profile.effective_public_url(),
-        ServiceKind::Actions => profile.actions_effective_public_url(),
     }
 }
 
 fn service_label(kind: ServiceKind) -> &'static str {
     match kind {
         ServiceKind::Mcp => "本地 MCP ",
-        ServiceKind::Actions => "本地 Actions ",
     }
 }
 
 fn stderr_log_name(kind: ServiceKind) -> &'static str {
     match kind {
         ServiceKind::Mcp => "stderr.log",
-        ServiceKind::Actions => "actions-stderr.log",
     }
 }
 
@@ -573,13 +505,6 @@ fn resolve_secret(profile_id: &str, key: &str, use_shared: bool) -> AppResult<Op
         SecretStore::get_shared(key)
     } else {
         SecretStore::get(profile_id, key)
-    }
-}
-
-fn actions_oauth_secret(profile_id: &str, key: &str) -> AppResult<String> {
-    match SecretStore::get(profile_id, key)? {
-        Some(value) if !value.is_empty() => Ok(value),
-        _ => SecretStore::regenerate(profile_id, key),
     }
 }
 
