@@ -41,9 +41,9 @@ The Workspace is also the memory boundary. Move from one upstream client to anot
 
 Upstream clients connect to Mnelyra once. OpenAI secure connection, Cloudflare, and FRP are managed from the Connections page; Workspace switching happens behind that connection, so changing projects does not mean rebuilding every ChatGPT, Claude, or MCP client configuration.
 
-### One control surface for the Workspace
+### Application controls stay outside the Workspace
 
-Application-level settings stay in one place: local MCP service, permission ceiling, developer controls, and ChatGPT compaction policy. They apply across imported Workspaces instead of being rebuilt project by project.
+Workspace items only switch the active project root. The shared MCP endpoint and OAuth/Bearer credentials live under Authentication, runtime logs and health live under General, and public routing lives under Connections. These controls apply across imported Workspaces instead of being rebuilt project by project.
 
 ![Mnelyra General settings](static/readme/mnelyra-general.png)
 
@@ -120,6 +120,8 @@ This can provide another model path when one API or account quota is constrained
 ## Workspace memory
 
 Mnelyra memory follows the Workspace. Different upstream clients can continue work on the same project without treating one ChatGPT or Claude conversation as the only source of project continuity.
+
+The Memory page is the human-readable observability surface for that system: it shows the derived current focus, recent changes, open work, and any recoverable provider checkpoints. The actual continuity mechanism is the durable history archive plus the history tools below; the UI is not a separate second memory store.
 
 The public history tools are:
 

@@ -373,6 +373,10 @@ select:disabled {
   margin: 0 2px 7px;
 }
 
+.tx-section-head--actions-only {
+  justify-content: flex-start;
+}
+
 .tx-add-compact {
   width: 29px;
   height: 29px;
@@ -870,7 +874,7 @@ textarea:focus {
 }
 
 .mn-memory-summary-card {
-  min-height: 178px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -2284,8 +2288,8 @@ pre {
 
 .mn-memory-main-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -2578,7 +2582,8 @@ pre {
 .mn-settings-stack-v2 {
   display: grid;
   gap: 12px;
-  max-width: 1180px;
+  width: 100%;
+  max-width: none;
 }
 
 .mn-settings-loading {

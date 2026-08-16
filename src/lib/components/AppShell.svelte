@@ -11,11 +11,10 @@
     children: Snippet;
     sidebar: Snippet;
     onAddWorkspace?: () => void | Promise<void>;
-    primaryNav?: Snippet;
     settingsNav?: Snippet;
   }
 
-  let { children, sidebar, onAddWorkspace, primaryNav, settingsNav }: Props = $props();
+  let { children, sidebar, onAddWorkspace, settingsNav }: Props = $props();
   const zh = $derived($uiLocale === "zh-CN");
   let settingsPopover = $state<HTMLDetailsElement | null>(null);
 
@@ -53,23 +52,14 @@
     </div>
 
     <div class="tx-sidebar-body">
-      {#if primaryNav}
-        <div class="tx-workbench-nav">
-          <p class="tx-sidebar-section-label">{zh ? "导航" : "Navigation"}</p>
-          <div class="tx-settings-stack">
-            {@render primaryNav()}
-          </div>
-        </div>
-      {/if}
       <div class="tx-workspace-section">
-        <div class="tx-section-head">
-          <p class="tx-sidebar-section-label">{zh ? "工作区" : "Workspaces"}</p>
-          {#if onAddWorkspace}
+        {#if onAddWorkspace}
+          <div class="tx-section-head tx-section-head--actions-only">
             <button type="button" class="tx-add-compact" onclick={onAddWorkspace} aria-label={zh ? "打开项目" : "Open project"} title={zh ? "打开项目" : "Open project"}>
               <FolderPlus size={15} strokeWidth={1.8} />
             </button>
-          {/if}
-        </div>
+          </div>
+        {/if}
         <div class="tx-workspace-scroll">
           {@render sidebar()}
         </div>

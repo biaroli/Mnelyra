@@ -9,7 +9,6 @@
     FolderOpen,
     FolderPlus,
     KeyRound,
-    Database,
     RefreshCw,
     SlidersHorizontal,
     Trash2,
@@ -24,7 +23,7 @@
     getRuntimeStatus,
     listWorkspaces,
   } from "$lib/api/workspaces";
-  import { getActiveWorkspaceState, getWorkspaceActivity } from "$lib/api/activity";
+  import { activateWorkspace, getActiveWorkspaceState, getWorkspaceActivity } from "$lib/api/activity";
   import { getProviderStatus } from "$lib/api/providers";
   import { getLastWorkspaceId } from "$lib/api/settings";
   import {
@@ -140,7 +139,7 @@
       await refreshWorkspaces();
       addWorkspaceOpen = false;
       manualWorkspacePath = "";
-      goto(`/workspace/${profile.id}`);
+      await openWorkspace(profile.id);
     } catch (error) {
       showToast(String(error), {
         title: "添加工作区失败",
@@ -194,17 +193,38 @@
     try {
       await deleteWorkspace(workspace.id);
       await refreshWorkspaces();
-      if ($page.url.pathname === `/workspace/${workspace.id}`) {
+      if (
+        !$activeWorkspaceState.workspaceId
+        || !$workspaces.some((item) => item.id === $activeWorkspaceState.workspaceId)
+      ) {
         const next = $workspaces[0];
-        await goto(next ? `/workspace/${next.id}` : "/");
+        if (next) await openWorkspace(next.id);
       }
     } catch (error) {
       showToast(String(error), { title: "移除工作区失败", kind: "error", duration: 8000 });
     }
   }
 
-  function openWorkspace(id: string) {
-    goto(`/workspace/${id}`);
+  async function openWorkspace(id: string) {
+    try {
+      if ($activeWorkspaceState.workspaceId !== id) {
+        const active = await activateWorkspace(id);
+        activeWorkspaceState.set(active);
+        const [activity, mcp] = await Promise.all([
+          getWorkspaceActivity(id),
+          getRuntimeStatus(id),
+        ]);
+        workspaceActivity.update((current) => ({ ...current, [id]: activity }));
+        mcpRuntimeStates.update((current) => ({ ...current, [id]: mcp.state }));
+      }
+      await goto(`/workspace/${id}`);
+    } catch (error) {
+      showToast(String(error), {
+        title: zh ? "工作区切换未完成" : "Workspace switch did not complete",
+        kind: "error",
+        duration: 9000,
+      });
+    }
   }
 
   function openGeneralSettings() {
@@ -217,10 +237,6 @@
 
   function openKeysSettings() {
     goto("/settings/keys");
-  }
-
-  function openMemory() {
-    goto("/memory");
   }
 
   async function checkStartupUpdate() {
@@ -260,11 +276,15 @@
       await refreshWorkspaces();
       const path = $page.url.pathname;
       if (path === "/") {
-        const lastId = await getLastWorkspaceId();
-        if (lastId && $workspaces.some((item) => item.id === lastId)) {
-          goto(`/workspace/${lastId}`);
-        } else if ($workspaces.length > 0) {
-          goto(`/workspace/${$workspaces[0].id}`);
+        if ($activeWorkspaceState.workspaceId) {
+          await goto(`/workspace/${$activeWorkspaceState.workspaceId}`, { replaceState: true });
+        } else {
+          const lastId = await getLastWorkspaceId();
+          if (lastId && $workspaces.some((item) => item.id === lastId)) {
+            await openWorkspace(lastId);
+          } else if ($workspaces.length > 0) {
+            await openWorkspace($workspaces[0].id);
+          }
         }
       }
     })();
@@ -286,24 +306,6 @@
 </script>
 
 <AppShell onAddWorkspace={addWorkspace}>
-  {#snippet primaryNav()}
-    <button
-      type="button"
-      class="tx-settings-link {$page.url.pathname === '/connectors' ? 'active' : ''}"
-      onclick={openConnectors}
-    >
-      <Cable size={14} strokeWidth={1.8} />
-      <span>{zh ? "连接" : "Connections"}</span>
-    </button>
-    <button
-      type="button"
-      class="tx-settings-link {$page.url.pathname === '/memory' ? 'active' : ''}"
-      onclick={openMemory}
-    >
-      <Database size={14} strokeWidth={1.8} />
-      <span>{zh ? "记忆" : "Memory"}</span>
-    </button>
-  {/snippet}
   {#snippet settingsNav()}
     <button
       type="button"
@@ -312,6 +314,14 @@
     >
       <SlidersHorizontal size={14} strokeWidth={1.8} />
       <span>{zh ? "通用" : "General"}</span>
+    </button>
+    <button
+      type="button"
+      class="tx-settings-link {$page.url.pathname === '/connectors' ? 'active' : ''}"
+      onclick={openConnectors}
+    >
+      <Cable size={14} strokeWidth={1.8} />
+      <span>{zh ? "连接" : "Connections"}</span>
     </button>
     <button
       type="button"
@@ -346,11 +356,11 @@
       {#each $workspaces as workspace (workspace.id)}
         <WorkspaceNavItem
           workspace={workspace}
-          selected={$page.url.pathname === `/workspace/${workspace.id}`}
+          selected={$activeWorkspaceState.workspaceId === workspace.id}
           activeRoot={$activeWorkspaceState.workspaceId === workspace.id}
           activity={$workspaceActivity[workspace.id]}
           mcpState={$mcpRuntimeStates[workspace.id] ?? "stopped"}
-          onClick={() => openWorkspace(workspace.id)}
+          onClick={() => void openWorkspace(workspace.id)}
           onContextMenu={(event) => openWorkspaceContext(workspace, event)}
         />
       {/each}

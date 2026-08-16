@@ -3,14 +3,22 @@
   import { message } from "@tauri-apps/plugin-dialog";
   import CopyButton from "$lib/components/CopyButton.svelte";
   import SecretInput from "$lib/components/SecretInput.svelte";
-  import { getGlobalAuth, setGlobalAuth } from "$lib/api/settings";
+  import ServicePanel from "$lib/components/ServicePanel.svelte";
+  import { getRuntimeStatus } from "$lib/api/workspaces";
+  import { getGlobalAuth, getGlobalGeneral, setGlobalAuth } from "$lib/api/settings";
   import {
     getSharedSecret,
     regenerateSharedSecret,
     type SharedSecretKey,
   } from "$lib/api/secrets";
+  import { activeWorkspaceState } from "$lib/stores/app";
   import { uiLocale } from "$lib/stores/locale";
-  import type { GlobalAuthConfig } from "$lib/types";
+  import {
+    mcpLocalEndpoint,
+    type GlobalAuthConfig,
+    type GlobalGeneralConfig,
+    type RuntimeStatus,
+  } from "$lib/types";
 
   type SecretRow = {
     key: SharedSecretKey;
@@ -31,6 +39,8 @@
   const ALL_ROWS = MCP_ROWS;
 
   let auth = $state<GlobalAuthConfig | null>(null);
+  let general = $state<GlobalGeneralConfig | null>(null);
+  let runtime = $state<RuntimeStatus | null>(null);
   let secrets = $state<Record<string, string>>({});
   let loading = $state(true);
   let saving = $state(false);
@@ -44,16 +54,34 @@
     return row.label;
   }
 
+  async function refreshRuntime(workspaceId: string | null) {
+    if (!workspaceId) {
+      runtime = null;
+      return;
+    }
+    try {
+      runtime = await getRuntimeStatus(workspaceId);
+    } catch {
+      runtime = null;
+    }
+  }
+
+  $effect(() => {
+    void refreshRuntime($activeWorkspaceState.workspaceId);
+  });
+
   async function refresh() {
     loading = true;
     try {
-      const [nextAuth, loaded] = await Promise.all([
+      const [nextAuth, nextGeneral, loaded] = await Promise.all([
         getGlobalAuth(),
+        getGlobalGeneral(),
         Promise.all(
           ALL_ROWS.map(async ({ key }) => [key, (await getSharedSecret(key)) ?? ""] as const),
         ),
       ]);
       auth = nextAuth;
+      general = nextGeneral;
       secrets = Object.fromEntries(loaded);
     } catch (error) {
       await message(String(error), { title: zh ? "加载认证设置失败" : "Failed to load authentication settings", kind: "error" });
@@ -95,6 +123,10 @@
 
   onMount(() => {
     void refresh();
+    const timer = window.setInterval(() => {
+      void refreshRuntime($activeWorkspaceState.workspaceId);
+    }, 3000);
+    return () => window.clearInterval(timer);
   });
 </script>
 
@@ -102,13 +134,29 @@
   <header class="page-header">
     <p class="page-kicker">{zh ? "访问控制" : "ACCESS CONTROL"}</p>
     <h2 class="page-title">{zh ? "认证" : "Authentication"}</h2>
-    <p class="mt-2 max-w-3xl text-sm text-[var(--color-text-muted)]">{zh ? "管理连接器使用的固定身份与密钥。" : "Manage connector identities and credentials."}</p>
+    <p class="mt-2 max-w-3xl text-sm text-[var(--color-text-muted)]">{zh ? "统一管理 MCP 连接地址、固定身份与授权密钥。" : "Manage the shared MCP endpoint, identity, and authorization credentials."}</p>
   </header>
 
   <div class="page-body flex flex-col gap-6">
     {#if loading || !auth}
       <div class="tx-card p-4 text-sm text-[var(--color-text-muted)]">{zh ? "加载中…" : "Loading…"}</div>
     {:else}
+      {#if general}
+        <ServicePanel
+          title="MCP"
+          subtitle={zh ? "所有工作区共用的连接入口；切换工作区不会改变客户端地址" : "Shared connection entry for every workspace; switching workspaces does not change the client endpoint"}
+          status={runtime?.state ?? "stopped"}
+          statusMessage={runtime?.localMessage ?? ""}
+          port={general.mcpRuntime.local_port}
+          portEditable={false}
+          tunnelType={general.mcpTunnel.type}
+          localEndpoint={runtime?.localEndpoint || mcpLocalEndpoint(general.mcpRuntime.local_port)}
+          publicEndpoint={runtime?.publicEndpoint ?? ""}
+          publicLabel={zh ? "公网 MCP" : "Public MCP"}
+          showToggle={false}
+        />
+      {/if}
+
       <div class="tx-card p-5">
         <p class="tx-section-label">{zh ? "MCP 认证" : "MCP authentication"}</p>
         <label class="mt-4 grid gap-1">

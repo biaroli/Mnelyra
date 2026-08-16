@@ -19,7 +19,7 @@ fn invoke_ok(ctx: &ToolContext, name: &str, args: Value) -> Value {
 }
 
 #[test]
-fn bootstrap_migrates_legacy_rootrelay_history_directory() {
+fn bootstrap_reuses_legacy_rootrelay_history_directory_in_place() {
     let (workspace, _harness, ctx) = test_context();
     let first = invoke_ok(
         &ctx,
@@ -41,12 +41,12 @@ fn bootstrap_migrates_legacy_rootrelay_history_directory() {
         json!({"session_key": "legacy-migration"}),
     );
     assert_eq!(resumed["resumed"], true);
-    assert_eq!(resumed["current_path"], ".mnelyra/history-session/1.md");
+    assert_eq!(resumed["current_path"], ".rootrelay/history-session/1.md");
     assert!(workspace
         .path()
-        .join(".mnelyra/history-session/1.md")
+        .join(".rootrelay/history-session/1.md")
         .is_file());
-    assert!(!workspace.path().join(".rootrelay/history-session").exists());
+    assert!(!workspace.path().join(".mnelyra/history-session").exists());
 }
 
 fn test_context() -> (tempfile::TempDir, tempfile::TempDir, ToolContext) {

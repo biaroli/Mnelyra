@@ -2,16 +2,22 @@
   import { onMount } from "svelte";
   import { message } from "@tauri-apps/plugin-dialog";
   import { Globe2, Save, TerminalSquare } from "@lucide/svelte";
+  import HealthPanel from "$lib/components/HealthPanel.svelte";
+  import LogViewer from "$lib/components/LogViewer.svelte";
+  import Tabs from "$lib/components/Tabs.svelte";
   import {
     getCodexContextPolicy,
     setCodexAutoCompactLimit,
     setPermissionCeiling,
   } from "$lib/api/providers";
   import { getGlobalGeneral, setGlobalGeneral } from "$lib/api/settings";
+  import { activeWorkspaceState, workspaces } from "$lib/stores/app";
   import { setUiLocale, uiLocale, type UiLocale } from "$lib/stores/locale";
   import { developerMode, setDeveloperMode } from "$lib/stores/developer";
   import { showToast } from "$lib/stores/toast";
-  import type { CodexConfigReadResponse, GlobalGeneralConfig } from "$lib/types";
+  import { workspaceRootName, type CodexConfigReadResponse, type GlobalGeneralConfig } from "$lib/types";
+
+  type DiagnosticsTab = "logs" | "health";
 
   let general = $state<GlobalGeneralConfig | null>(null);
   let loading = $state(true);
@@ -20,9 +26,17 @@
   let compactPolicyLoading = $state(false);
   let compactBusy = $state(false);
   let permissionBusy = $state(false);
+  let diagnosticsTab = $state<DiagnosticsTab>("logs");
   let compactMode = $state<"auto" | "custom">("auto");
   let compactLimitInput = $state("");
   const zh = $derived($uiLocale === "zh-CN");
+  const activeProfile = $derived(
+    $workspaces.find((workspace) => workspace.id === $activeWorkspaceState.workspaceId) ?? null,
+  );
+  const diagnosticsTabs = $derived([
+    { value: "logs", label: zh ? "日志" : "Logs" },
+    { value: "health", label: zh ? "健康" : "Health" },
+  ]);
 
   function compactLimitFrom(policy: CodexConfigReadResponse | null): number | null {
     const value = policy?.config?.model_auto_compact_token_limit;
@@ -306,6 +320,42 @@
         <div class="mn-settings-save-row">
           <span>{zh ? "修改端口会触发对应 runtime 的事务式重绑。" : "Port changes trigger transactional runtime rebinding."}</span>
           <button type="button" class="tx-btn-primary" disabled={saving} onclick={() => void savePorts()}><Save size={13} /> {saving ? (zh ? "保存中…" : "Saving…") : (zh ? "保存设置" : "Save settings")}</button>
+        </div>
+
+        <div class="mt-6 border-t border-[var(--color-border)] pt-5">
+          <div class="mb-4 flex items-end justify-between gap-4">
+            <div>
+              <span class="page-kicker">{zh ? "运行诊断" : "RUNTIME DIAGNOSTICS"}</span>
+              <h3 class="mt-1">{zh ? "日志与健康" : "Logs and health"}</h3>
+              {#if activeProfile}
+                <p class="mt-1 text-sm text-[var(--color-text-muted)]">
+                  {zh ? "当前活动工作区" : "Active workspace"} · {workspaceRootName(activeProfile.path)}
+                </p>
+              {/if}
+            </div>
+          </div>
+
+          <Tabs
+            items={diagnosticsTabs}
+            value={diagnosticsTab}
+            onchange={(value) => (diagnosticsTab = value as DiagnosticsTab)}
+          />
+
+          <div class="mt-4">
+            {#if $activeWorkspaceState.workspaceId}
+              {#key $activeWorkspaceState.workspaceId}
+                {#if diagnosticsTab === "logs"}
+                  <LogViewer workspaceId={$activeWorkspaceState.workspaceId} service="mcp" />
+                {:else}
+                  <HealthPanel workspaceId={$activeWorkspaceState.workspaceId} />
+                {/if}
+              {/key}
+            {:else}
+              <div class="tx-card p-4 text-sm text-[var(--color-text-muted)]">
+                {zh ? "先从左侧选择一个工作区，再查看当前 MCP runtime 的日志与健康状态。" : "Select a workspace first to inspect the active MCP runtime logs and health."}
+              </div>
+            {/if}
+          </div>
         </div>
       </section>
 

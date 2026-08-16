@@ -775,7 +775,7 @@ fn authorization_page(
         @media(max-width:520px){{body{{padding:16px}}.card{{padding:22px;border-radius:18px}}.meta-row{{align-items:flex-start;flex-direction:column;gap:3px;padding:10px 0}}.meta-row strong{{white-space:normal;text-align:left;word-break:break-all}}}}\
         </style></head><body><main class='shell'><section class='card'>\
         <div class='brand'><img src='data:image/png;base64,{icon}' alt='Mnelyra'><div><h1>授权 Mnelyra</h1><p>Authorize MCP connection</p></div></div>\
-        <p class='intro'>一个 MCP 客户端正在请求访问 Mnelyra。输入桌面端“认证”页面显示的授权码以继续。</p>\
+        <p class='intro'>一个 MCP 客户端正在请求访问 Mnelyra。输入桌面端认证页面显示的授权码以继续。</p>\
         <div class='meta'>{workspace}<div class='meta-row'><span>客户端</span><strong>{}</strong></div></div>\
         {error_block}\
         <form method='post' action='/oauth/authorize'>\

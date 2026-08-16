@@ -302,4 +302,47 @@ mod tests {
         assert!(metadata.get("turns").is_none());
         assert_eq!(turn["id"], "turn_1");
     }
+
+    #[test]
+    fn workspace_memory_overview_reads_existing_rootrelay_history() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let history_root = temp.path().join(".rootrelay").join("history-session");
+        let memory_root = history_root.join("memory");
+        std::fs::create_dir_all(&memory_root).expect("memory dir");
+        std::fs::write(
+            memory_root.join("manifest.json"),
+            r#"{
+  "archive_revision": "sha256:archive",
+  "memory_revision": "sha256:memory"
+}"#,
+        )
+        .expect("manifest");
+        std::fs::write(
+            memory_root.join("state.json"),
+            r#"{
+  "generated_at": "123",
+  "current_focus": "Continue the Mnelyra workspace task",
+  "recent_changes": ["README.md"],
+  "open_items": ["Verify the UI"]
+}"#,
+        )
+        .expect("state");
+
+        let overview = list_provider_checkpoints("workspace-1", temp.path()).expect("overview");
+
+        assert!(
+            overview
+                .history_root
+                .ends_with(".rootrelay\\history-session")
+                || overview
+                    .history_root
+                    .ends_with(".rootrelay/history-session")
+        );
+        assert_eq!(
+            overview.current_focus,
+            "Continue the Mnelyra workspace task"
+        );
+        assert_eq!(overview.recent_changes, vec!["README.md"]);
+        assert_eq!(overview.open_items, vec!["Verify the UI"]);
+    }
 }

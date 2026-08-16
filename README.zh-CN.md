@@ -41,9 +41,9 @@ Mnelyra 把一个真实的本地项目目录变成所有上游 AI 都能共同�
 
 上游只需要连 Mnelyra。OpenAI 安全连接、Cloudflare 和 FRP 都集中在连接页；工作区切换发生在 Mnelyra 后面，所以不需要每换一个项目就重新配置 ChatGPT、Claude 或其他 MCP 客户端。
 
-### 一个地方管整个 Workspace
+### 应用级控制不塞进 Workspace 页面
 
-本机 MCP、权限总阀门、开发者控制和 ChatGPT 总结策略都集中在通用设置里，并应用到所有工作区，不需要每个项目重复配置。
+左侧 Workspace 只负责切换当前项目根目录。共享 MCP 地址与 OAuth/Bearer 授权集中在“认证”，运行日志和健康检查放在“通用”，公网路由仍在“连接”。这些控制应用到所有工作区，不需要每个项目重复配置。
 
 ![Mnelyra 通用设置](static/readme/mnelyra-general.png)
 
@@ -120,6 +120,8 @@ git_status
 ## 工作区记忆
 
 Mnelyra 的记忆跟 Workspace 走。不同上游可以围绕同一个项目继续工作，不需要把“记忆”绑定到某一个 ChatGPT 或 Claude 会话。
+
+“记忆”页面本身是给人看的观测面：显示从持久历史中派生出来的当前焦点、最近变化、未完成项，以及 provider 真正提供的可恢复 checkpoint。真正负责跨客户端连续性的仍然是持久 history 档案和下面这些 history 工具；这个页面不是另一套独立记忆库。
 
 公开的 history 工具包括：
 

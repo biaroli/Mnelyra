@@ -52,7 +52,7 @@ The optional ChatGPT Web bridge is a provider path, not a second Workspace. It c
 
 Workspace selection is an execution change, not a visual preference. A successful switch updates the active root, refreshes workspace-scoped runtime state, and ensures subsequent tool calls resolve against the selected project.
 
-Do not add a second “start Workspace” action after selection. Selecting a Workspace is the activation action.
+Do not add a second “start Workspace” action after selection. Selecting a Workspace is the activation action, and the sidebar item should not open a per-Workspace MCP/health/log dashboard. Shared endpoint/authentication controls belong under Authentication; runtime diagnostics belong under General.
 
 Application-level settings such as authentication, connection routing, permission ceiling, and developer controls are shared across imported Workspaces. Project-specific state stays with the Workspace.
 

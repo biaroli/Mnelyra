@@ -73,7 +73,7 @@ pub fn resolve_history_dir(
         return Err(WorkspaceError::path_outside_workspace());
     }
     if matches!(raw, DEFAULT_HISTORY_DIR | LEGACY_HISTORY_DIR) {
-        return migrate_default_history_dir(workspace);
+        return resolve_default_history_dir(workspace);
     }
     let candidate = workspace
         .root()
@@ -87,7 +87,7 @@ pub fn resolve_history_dir(
     Ok(candidate)
 }
 
-fn migrate_default_history_dir(workspace: &Workspace) -> WorkspaceResult<PathBuf> {
+fn resolve_default_history_dir(workspace: &Workspace) -> WorkspaceResult<PathBuf> {
     let current = workspace
         .root()
         .join(DEFAULT_HISTORY_DIR.replace('/', std::path::MAIN_SEPARATOR_STR));
@@ -106,15 +106,12 @@ fn migrate_default_history_dir(workspace: &Workspace) -> WorkspaceResult<PathBuf
                 "legacy history path must be a directory",
             ));
         }
-        if let Some(parent) = current.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|error| io_error("HISTORY_WRITE_FAILED", error, true))?;
-        }
-        fs::rename(&legacy, &current)
-            .map_err(|error| io_error("HISTORY_WRITE_FAILED", error, true))?;
-        if let Some(legacy_parent) = legacy.parent() {
-            let _ = fs::remove_dir(legacy_parent);
-        }
+        // Existing RootRelay archives may be actively held by an MCP/history client.
+        // Moving an in-use directory on Windows can fail with Access denied (os error 5)
+        // and, worse, can split one workspace's durable history across two locations.
+        // Keep using the legacy archive in place. New workspaces that have no legacy
+        // archive still resolve to `.mnelyra/history-session` below.
+        return Ok(legacy);
     }
     Ok(current)
 }
@@ -384,7 +381,7 @@ pub fn build_state(
             current_document
                 .map(|document| markdown::document_title(&document.content, document.number))
         })
-        .unwrap_or_else(|| "尚未记录当前焦点".to_string());
+        .unwrap_or_default();
     let mut recent_changes = Vec::new();
     let mut open_items = Vec::new();
     for document in report.documents.iter().rev() {
@@ -506,10 +503,12 @@ fn latest_user_focus(content: &str) -> Option<String> {
         .into_iter()
         .max_by_key(|record| record.revision)
         .and_then(|record| {
-            if record.raw_user_input.trim().is_empty() {
-                (!record.user_intent.trim().is_empty()).then_some(record.user_intent)
-            } else {
+            if !record.user_intent.trim().is_empty() {
+                Some(record.user_intent)
+            } else if !record.raw_user_input.trim().is_empty() {
                 Some(record.raw_user_input)
+            } else {
+                None
             }
         })
         .or_else(|| {
@@ -697,6 +696,42 @@ fn io_error(code: &'static str, error: io::Error, retryable: bool) -> WorkspaceE
 #[cfg(test)]
 mod provider_memory_tests {
     use super::*;
+
+    #[test]
+    fn current_focus_prefers_structured_user_intent_over_raw_input() {
+        let record = super::super::model::CheckpointRecord {
+            turn_id: "turn-1".into(),
+            revision: 1,
+            user_intent:
+                "Fix the remaining ChatGPT Web bridge overflow in the README architecture diagram."
+                    .into(),
+            raw_user_input: "还是超了".into(),
+            ..Default::default()
+        };
+        let content = markdown::append_checkpoint_record("# Session\n", &record);
+
+        assert_eq!(
+            latest_user_focus(&content).as_deref(),
+            Some(
+                "Fix the remaining ChatGPT Web bridge overflow in the README architecture diagram."
+            )
+        );
+    }
+
+    #[test]
+    fn default_history_resolution_keeps_existing_legacy_archive_in_place() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let legacy = temp.path().join(LEGACY_HISTORY_DIR);
+        fs::create_dir_all(&legacy).expect("legacy history dir");
+        fs::write(legacy.join("1.md"), "# Existing history\n").expect("legacy history");
+        let workspace = Workspace::new(temp.path().to_path_buf()).expect("workspace");
+
+        let resolved = resolve_history_dir(&workspace, None, None).expect("resolve history");
+
+        assert_eq!(resolved, legacy.canonicalize().expect("canonical legacy"));
+        assert!(temp.path().join(LEGACY_HISTORY_DIR).is_dir());
+        assert!(!temp.path().join(DEFAULT_HISTORY_DIR).exists());
+    }
 
     #[test]
     fn provider_checkpoint_changes_memory_revision_not_archive_revision() {
