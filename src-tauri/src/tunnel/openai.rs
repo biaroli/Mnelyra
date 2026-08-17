@@ -375,41 +375,34 @@ fn render_profile(
         serde_json::to_string(value.as_ref()).unwrap_or_else(|_| "\"\"".into())
     }
     let mcp_url = format!("http://127.0.0.1:{mcp_port}/mcp");
-    format!(
-        "config_version: 1\n\
-control_plane:\n\
-  tunnel_id: {}\n\
-  api_key: {}\n\
-mcp:\n\
-  server_urls:\n\
-    - channel: main\n\
-      url: {}\n\
-  extra_headers:\n\
-    {}: {}\n\
-  discovery_extra_headers:\n\
-    {}: {}\n\
-health:\n\
-  listen_addr: \"127.0.0.1:0\"\n\
-  url_file: {}\n\
-admin_ui:\n\
-  open_browser: false\n\
-process:\n\
-  pid_file: {}\n\
-log:\n\
-  level: info\n\
-  format: json\n\
-  file: {}\n",
-        q(&config.tunnel_id),
-        q(format!("file:{}", runtime_key_file.to_string_lossy())),
-        q(mcp_url),
-        TUNNEL_TOKEN_HEADER,
-        q(format!("file:{}", mcp_token_file.to_string_lossy())),
-        TUNNEL_TOKEN_HEADER,
-        q(format!("file:{}", mcp_token_file.to_string_lossy())),
-        q(health_url_file.to_string_lossy()),
-        q(pid_path.to_string_lossy()),
-        q(log_path.to_string_lossy()),
-    )
+    let runtime_key = q(format!("file:{}", runtime_key_file.to_string_lossy()));
+    let mcp_token = q(format!("file:{}", mcp_token_file.to_string_lossy()));
+    let lines = vec![
+        "config_version: 1".to_string(),
+        "control_plane:".to_string(),
+        format!("  tunnel_id: {}", q(&config.tunnel_id)),
+        format!("  api_key: {runtime_key}"),
+        "mcp:".to_string(),
+        "  server_urls:".to_string(),
+        "    - channel: main".to_string(),
+        format!("      url: {}", q(mcp_url)),
+        "  extra_headers:".to_string(),
+        format!("    {TUNNEL_TOKEN_HEADER}: {mcp_token}"),
+        "  discovery_extra_headers:".to_string(),
+        format!("    {TUNNEL_TOKEN_HEADER}: {mcp_token}"),
+        "health:".to_string(),
+        "  listen_addr: \"127.0.0.1:0\"".to_string(),
+        format!("  url_file: {}", q(health_url_file.to_string_lossy())),
+        "admin_ui:".to_string(),
+        "  open_browser: false".to_string(),
+        "process:".to_string(),
+        format!("  pid_file: {}", q(pid_path.to_string_lossy())),
+        "log:".to_string(),
+        "  level: info".to_string(),
+        "  format: json".to_string(),
+        format!("  file: {}", q(log_path.to_string_lossy())),
+    ];
+    format!("{}\n", lines.join("\n"))
 }
 
 fn spawn_log_reader<R>(reader: R, tail: Arc<Mutex<String>>)
@@ -630,6 +623,13 @@ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb  wanted.zip\n";
         assert!(profile.contains(&format!(
             "{TUNNEL_TOKEN_HEADER}: \"file:C:/mnelyra/mcp.token\""
         )));
+        assert!(profile.contains(&format!(
+            "\n  extra_headers:\n    {TUNNEL_TOKEN_HEADER}: \"file:C:/mnelyra/mcp.token\"\n"
+        )));
+        assert!(profile.contains(&format!(
+            "\n  discovery_extra_headers:\n    {TUNNEL_TOKEN_HEADER}: \"file:C:/mnelyra/mcp.token\"\n"
+        )));
+        assert!(!profile.contains(&format!("\n{TUNNEL_TOKEN_HEADER}:")));
         assert!(profile.contains("url: \"http://127.0.0.1:3000/mcp\""));
         assert!(profile.contains("listen_addr: \"127.0.0.1:0\""));
         assert!(!profile.contains("sk-"));

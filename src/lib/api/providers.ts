@@ -55,6 +55,16 @@ export async function setCodexAutoCompactLimit(
   });
 }
 
+export async function setCodexContextPolicy(
+  contextWindow: number | null,
+  autoCompactTokenLimit: number | null,
+): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>("set_codex_context_policy", {
+    contextWindow,
+    autoCompactTokenLimit,
+  });
+}
+
 export async function setPermissionCeiling(
   mode: "automatic" | "read_only" | "custom",
 ): Promise<void> {

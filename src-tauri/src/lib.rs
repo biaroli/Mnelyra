@@ -3,6 +3,7 @@
 mod activity;
 mod app_state;
 mod auth;
+mod codex_web;
 mod commands;
 mod data;
 mod error;
@@ -24,24 +25,25 @@ use app_state::AppState;
 use commands::{
     activate_workspace, can_switch_workspace, cancel_session, check_app_update, compact_session,
     create_workspace, delete_frp_profile, delete_workspace, get_active_workspace_state,
-    get_app_settings, get_codex_context_policy, get_download_config, get_frp_snippet,
-    get_global_auth, get_global_general, get_last_workspace_id, get_openai_connector_settings,
-    get_openai_connector_status, get_pending_session_requests, get_provider_checkpoint,
-    get_provider_status, get_runtime_status, get_session_event_page, get_session_events,
-    get_shared_secret, get_webview_memory_sample, get_workspace_activity,
+    get_app_settings, get_codex_context_policy, get_codex_web_bridge_status, get_download_config,
+    get_frp_snippet, get_global_auth, get_global_general, get_last_workspace_id,
+    get_openai_connector_settings, get_openai_connector_status, get_pending_session_requests,
+    get_provider_checkpoint, get_provider_status, get_runtime_status, get_session_event_page,
+    get_session_events, get_shared_secret, get_webview_memory_sample, get_workspace_activity,
     get_workspace_memory_overview, hide_to_tray, install_openai_tunnel_client, install_software,
     list_frp_profiles, list_providers, list_sessions, list_software, list_workspaces, open_url,
     open_workspace_directory, quit_app, read_workspace_logs, recreate_ui_webview,
     regenerate_shared_secret, respond_session_request, restart_runtime, restart_tunnel,
     run_health_checks, save_frp_profile, save_openai_connector_settings, send_session_input,
-    set_codex_auto_compact_limit, set_download_config, set_global_auth, set_global_general,
-    set_last_workspace, set_permission_ceiling, set_shared_secret, show_main_window,
-    start_openai_connector, start_provider_task, start_runtime, start_tunnel,
-    stop_openai_connector, stop_runtime, stop_tunnel, test_tunnel, uninstall_software,
-    update_workspace,
+    set_codex_auto_compact_limit, set_codex_context_policy, set_download_config, set_global_auth,
+    set_global_general, set_last_workspace, set_permission_ceiling, set_shared_secret,
+    show_main_window, start_background_services, start_codex_web_bridge, start_openai_connector,
+    start_provider_task, start_runtime, start_tunnel, stop_openai_connector, stop_runtime,
+    stop_tunnel, test_tunnel, uninstall_software, update_workspace,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::webview::PageLoadEvent;
 use tauri::{Emitter, Manager, WindowEvent};
 
 #[cfg(target_os = "windows")]
@@ -171,50 +173,14 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .on_page_load(|webview, payload| {
+            if payload.event() == PageLoadEvent::Finished {
+                commands::schedule_after_page_load(webview.app_handle().clone());
+            }
+        })
         .setup(|app| {
             app.manage(AppState::new().expect("failed to load app state"));
-            let app_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let state = app_handle.state::<AppState>();
-                // Prioritize the component required by the active MCP tunnel so
-                // MCP clients come back online as soon as possible. The other tunnel
-                // client is filled in afterwards and must never block MCP startup.
-                let required_kind = state
-                    .with_settings(|store| {
-                        let settings = store.settings();
-                        Ok(match settings.general.mcp_tunnel.tunnel_type.as_str() {
-                            "frp" => Some("frpc".to_string()),
-                            "cloudflare" => Some("cloudflared".to_string()),
-                            _ => None,
-                        })
-                    })
-                    .unwrap_or(None);
-
-                if let Some(required_kind) = required_kind.as_deref() {
-                    let missing = tunnel::list_software()
-                        .into_iter()
-                        .find(|status| status.kind == required_kind)
-                        .is_some_and(|status| !status.installed);
-                    if missing {
-                        if let Err(error) = tunnel::install_software(required_kind).await {
-                            eprintln!("automatic {required_kind} install failed: {error}");
-                        }
-                    }
-                }
-
-                commands::runtime::auto_start_configured_mcp(state.inner()).await;
-                commands::auto_start_openai_connector(state.inner()).await;
-
-                // Complete the self-contained installation in the background
-                // only after the active MCP has had its chance to come online.
-                for status in tunnel::list_software() {
-                    if !status.installed && Some(status.kind.as_str()) != required_kind.as_deref() {
-                        if let Err(error) = tunnel::install_software(&status.kind).await {
-                            eprintln!("background {} install failed: {error}", status.kind);
-                        }
-                    }
-                }
-            });
+            commands::schedule_fallback(app.handle().clone());
             // Recover FRP clients that stay alive while the public proxy dies
             // (common after install/restart network blips).
             tunnel::ensure_frp_health_loop();
@@ -234,13 +200,17 @@ pub fn run() {
             get_provider_status,
             get_codex_context_policy,
             set_codex_auto_compact_limit,
+            set_codex_context_policy,
             set_permission_ceiling,
+            start_background_services,
             get_openai_connector_settings,
             save_openai_connector_settings,
             get_openai_connector_status,
             install_openai_tunnel_client,
             start_openai_connector,
             stop_openai_connector,
+            get_codex_web_bridge_status,
+            start_codex_web_bridge,
             list_sessions,
             get_workspace_memory_overview,
             get_provider_checkpoint,

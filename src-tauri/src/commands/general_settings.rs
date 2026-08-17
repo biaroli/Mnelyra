@@ -40,11 +40,6 @@ pub async fn set_global_general(
         crate::workspace::activation::activate_workspace_with_options(&state, &selected_id, true)
             .await
             .map_err(|error| AppError::Message(error.to_string()))?;
-        // Global MCP port changes invalidate Mode B's loopback target. If the
-        // connector is enabled, rebuild its owned runtime against the freshly
-        // verified authoritative listener instead of leaving a stale "ready"
-        // tunnel pointed at the old port.
-        crate::commands::auto_start_openai_connector(&state).await;
     }
     Ok(())
 }

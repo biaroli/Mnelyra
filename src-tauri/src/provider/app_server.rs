@@ -24,6 +24,24 @@ enum AppServerRequestFailure {
     Transport(String),
 }
 
+fn validate_context_policy(
+    context_window: Option<u64>,
+    auto_compact_token_limit: Option<u64>,
+) -> Result<(), String> {
+    if context_window.is_some_and(|value| value < 16_384) {
+        return Err("context window must be at least 16384 tokens".into());
+    }
+    if auto_compact_token_limit.is_some_and(|value| value < 16_384) {
+        return Err("auto-compaction threshold must be at least 16384 tokens".into());
+    }
+    if let (Some(context), Some(compact)) = (context_window, auto_compact_token_limit) {
+        if compact >= context {
+            return Err("auto-compaction threshold must be lower than the context window".into());
+        }
+    }
+    Ok(())
+}
+
 type PendingResponse = Result<Value, AppServerRequestFailure>;
 type PendingSender = oneshot::Sender<PendingResponse>;
 type PendingRequests = Arc<Mutex<HashMap<u64, PendingSender>>>;
@@ -397,6 +415,36 @@ impl CodexAppServerManager {
                         "value": value,
                         "mergeStrategy": "replace"
                     }],
+                    "reloadUserConfig": false
+                }),
+            )
+            .await
+    }
+
+    pub async fn set_context_policy(
+        &self,
+        context_window: Option<u64>,
+        auto_compact_token_limit: Option<u64>,
+    ) -> Result<Value, String> {
+        validate_context_policy(context_window, auto_compact_token_limit)?;
+        self.ensure_started().await?;
+        self.connection()
+            .await?
+            .request(
+                "config/batchWrite",
+                json!({
+                    "edits": [
+                        {
+                            "keyPath": "model_context_window",
+                            "value": context_window.map(Value::from).unwrap_or(Value::Null),
+                            "mergeStrategy": "replace"
+                        },
+                        {
+                            "keyPath": "model_auto_compact_token_limit",
+                            "value": auto_compact_token_limit.map(Value::from).unwrap_or(Value::Null),
+                            "mergeStrategy": "replace"
+                        }
+                    ],
                     "reloadUserConfig": false
                 }),
             )
@@ -851,5 +899,16 @@ mod tests {
         let last = overload_retry_delay(SERVER_OVERLOAD_RETRIES);
         assert!(second > first);
         assert!(last < Duration::from_secs(5));
+    }
+
+    #[test]
+    fn context_policy_accepts_one_million_preset() {
+        assert!(validate_context_policy(Some(1_000_000), Some(900_000)).is_ok());
+    }
+
+    #[test]
+    fn context_policy_rejects_compaction_at_or_above_window() {
+        assert!(validate_context_policy(Some(100_000), Some(100_000)).is_err());
+        assert!(validate_context_policy(Some(100_000), Some(110_000)).is_err());
     }
 }

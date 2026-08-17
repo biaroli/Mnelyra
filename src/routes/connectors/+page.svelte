@@ -2,24 +2,22 @@
   import { onMount } from "svelte";
   import { openUrl } from "$lib/api/app-info";
   import {
+    getCodexWebBridgeStatus,
     getOpenAiConnectorSettings,
-    getOpenAiConnectorStatus,
     saveOpenAiConnectorSettings,
-    startOpenAiConnector,
-    stopOpenAiConnector,
+    startCodexWebBridge,
   } from "$lib/api/connectors";
   import { showToast } from "$lib/stores/toast";
   import { uiLocale } from "$lib/stores/locale";
   import { activeWorkspaceState, mcpRuntimeStates } from "$lib/stores/app";
   import { getRuntimeStatus } from "$lib/api/workspaces";
   import ConnectionRoutingPanel from "$lib/components/ConnectionRoutingPanel.svelte";
-  import type { OpenAiConnectorSettings, OpenAiConnectorStatus } from "$lib/types";
-  import { CircleStop, ExternalLink, Play, Save, ShieldCheck } from "@lucide/svelte";
+  import type { CodexWebBridgeStatus, OpenAiConnectorSettings } from "$lib/types";
+  import { ExternalLink, Play, Save } from "@lucide/svelte";
 
   let settings = $state<OpenAiConnectorSettings | null>(null);
-  let status = $state<OpenAiConnectorStatus | null>(null);
+  let codexWeb = $state<CodexWebBridgeStatus | null>(null);
   let tunnelId = $state("");
-  let alias = $state("mnelyra");
   let runtimeApiKey = $state("");
   let publicRouteReady = $state(false);
   let busy = $state(false);
@@ -29,88 +27,66 @@
     $activeWorkspaceState.workspaceId != null
       && $mcpRuntimeStates[$activeWorkspaceState.workspaceId] === "running",
   );
-  const connectionFlowing = $derived(mcpReady && (publicRouteReady || Boolean(status?.ready)));
-
-  const statusLabel = $derived(
-    status?.ready
-      ? (zh ? "已就绪" : "READY")
-      : status?.processRunning
-        ? status?.healthy
-          ? (zh ? "连接中" : "STARTING")
-          : (zh ? "异常" : "DEGRADED")
-        : status?.configured
-          ? (zh ? "未启动" : "STOPPED")
-          : (zh ? "未配置" : "NOT CONFIGURED"),
-  );
+  const connectionFlowing = $derived(mcpReady && publicRouteReady);
+  const codexTunnelRequired = $derived(codexWeb?.mode === "full");
 
   async function refresh() {
     try {
       const workspaceId = $activeWorkspaceState.workspaceId;
-      const [nextSettings, nextStatus, runtime] = await Promise.all([
+      const [nextSettings, nextCodexWeb, runtime] = await Promise.all([
         getOpenAiConnectorSettings(),
-        getOpenAiConnectorStatus(),
+        getCodexWebBridgeStatus().catch(() => null),
         workspaceId ? getRuntimeStatus(workspaceId).catch(() => null) : Promise.resolve(null),
       ]);
       settings = nextSettings;
-      status = nextStatus;
+      codexWeb = nextCodexWeb;
       publicRouteReady = Boolean(runtime?.state === "running" && runtime.publicEndpoint?.trim());
-      if (!tunnelId) tunnelId = nextSettings.tunnelId;
-      if (alias === "mnelyra" && nextSettings.alias) alias = nextSettings.alias;
+      if (!tunnelId) tunnelId = nextCodexWeb?.tunnelId || nextSettings.tunnelId;
     } catch (error) {
       showToast(String(error), { title: zh ? "连接状态读取失败" : "Failed to read connector status", kind: "error", duration: 8000 });
     }
   }
 
-  async function persistSettings() {
+  async function recoverCodexWeb() {
+    if (busy) return;
+    busy = true;
+    const installingRoute = !codexWeb?.routeInstalled;
+    try {
+      if (tunnelId.trim() || runtimeApiKey.trim()) await persistTunnelSetup();
+      codexWeb = await startCodexWebBridge();
+      showToast(installingRoute
+        ? (zh ? "网页模型路由已安装。重启 Codex 一次以刷新原生模型列表。" : "Web-model routing is installed. Restart Codex once to refresh its native model catalog.")
+        : (zh ? "网页模型接入已恢复。" : "Web model access is ready."), {
+        title: installingRoute ? (zh ? "已安装到 Codex" : "Installed in Codex") : (zh ? "网页模型已就绪" : "Web models ready"),
+        kind: "success",
+      });
+    } catch (error) {
+      showToast(String(error), { title: zh ? "网页模型恢复失败" : "Failed to recover web models", kind: "error", duration: 11000 });
+      codexWeb = await getCodexWebBridgeStatus().catch(() => codexWeb);
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function persistTunnelSetup() {
     settings = await saveOpenAiConnectorSettings({
       tunnelId,
-      alias,
+      alias: settings?.alias || "mnelyra",
       runtimeApiKey: runtimeApiKey.trim() || null,
     });
-    runtimeApiKey = "";
-    status = await getOpenAiConnectorStatus();
   }
 
-  async function save() {
+  async function saveTunnelSetup() {
     if (busy) return;
     busy = true;
     try {
-      await persistSettings();
-      showToast(zh ? "OpenAI Tunnel 配置已保存。Runtime key 不会写入命令行。" : "OpenAI Tunnel settings saved. The runtime key is never written to the command line.", {
-        title: zh ? "连接配置已保存" : "Connection saved",
+      await persistTunnelSetup();
+      showToast(zh ? "配置已保存。Runtime Key 不写入命令行。" : "Settings saved. The Runtime Key is not written to the command line.", {
+        title: zh ? "已保存" : "Saved",
         kind: "success",
       });
     } catch (error) {
-      showToast(String(error), { title: zh ? "连接配置保存失败" : "Failed to save connection", kind: "error", duration: 9000 });
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function connect() {
-    if (busy) return;
-    busy = true;
-    try {
-      await persistSettings();
-      status = await startOpenAiConnector();
-      showToast(zh ? "OpenAI Tunnel 已通过进程、健康与就绪三重验证。" : "OpenAI Tunnel passed process, health, and readiness verification.", {
-        title: zh ? "安全隧道已在线" : "Secure tunnel online",
-        kind: "success",
-      });
-    } catch (error) {
-      showToast(String(error), { title: zh ? "OpenAI Tunnel 连接失败" : "OpenAI Tunnel connection failed", kind: "error", duration: 11000 });
-    } finally {
-      busy = false;
-    }
-  }
-
-  async function stop() {
-    if (busy) return;
-    busy = true;
-    try {
-      status = await stopOpenAiConnector();
-    } catch (error) {
-      showToast(String(error), { title: zh ? "Tunnel 停止失败" : "Failed to stop tunnel", kind: "error", duration: 9000 });
+      showToast(String(error), { title: zh ? "配置保存失败" : "Failed to save settings", kind: "error", duration: 9000 });
     } finally {
       busy = false;
     }
@@ -119,7 +95,7 @@
   onMount(() => {
     void refresh();
     timer = window.setInterval(() => {
-      void getOpenAiConnectorStatus().then((value) => (status = value)).catch(() => {});
+      void getCodexWebBridgeStatus().then((value) => (codexWeb = value)).catch(() => {});
       const workspaceId = $activeWorkspaceState.workspaceId;
       if (!workspaceId) {
         publicRouteReady = false;
@@ -132,7 +108,10 @@
         .catch(() => {
           publicRouteReady = false;
         });
-    }, 2500);
+    // Web-model status runs the upstream route/doctor probes, which are substantially heavier
+    // than the local tunnel status read. Five seconds keeps the UI fresh without spawning helper
+    // processes several times per second while this page is open.
+    }, 5000);
     return () => {
       if (timer) window.clearInterval(timer);
     };
@@ -149,9 +128,9 @@
 
   <div class="mn-connection-board">
     <div class="mn-connection-map" class:flowing={connectionFlowing} aria-label={zh ? "连接拓扑" : "Connection topology"}>
-      <div class="mn-map-node client"><span>{zh ? "上游" : "UPSTREAM"}</span><strong>{zh ? "MCP 客户端" : "MCP clients"}</strong></div>
+      <div class="mn-map-node client"><span>{zh ? "远程客户端" : "REMOTE CLIENTS"}</span><strong>ChatGPT · Claude · MCP</strong></div>
       <div class="mn-map-wire"><i></i><b></b></div>
-      <div class="mn-map-node relay"><span>{zh ? "连接" : "CONNECTION"}</span><strong>{zh ? "选择接入方式" : "Choose a connection path"}</strong></div>
+      <div class="mn-map-node relay"><span>{zh ? "公网接入" : "PUBLIC ACCESS"}</span><strong>Cloudflare / FRP</strong></div>
       <div class="mn-map-wire"><i></i><b></b></div>
       <div class="mn-map-node core"><span>MNELYRA</span><strong>{zh ? "MCP 控制面" : "MCP control plane"}</strong></div>
       <div class="mn-map-wire"><i></i><b></b></div>
@@ -161,64 +140,86 @@
     <div class="mn-connection-workbench">
       <ConnectionRoutingPanel />
 
-      <section class="mn-connection-telemetry-panel" class:online={status?.ready}>
-      <div class="mn-panel-cap">
-        <div><span>OPENAI</span><strong>{zh ? "安全连接" : "Secure connection"}</strong></div>
-        <b class:online={status?.ready}>{statusLabel}</b>
-      </div>
-      {#if status?.processRunning || status?.ready}
-        <div class="mn-tunnel-live-row">
+      <section class="mn-connection-telemetry-panel mn-codex-bridge-panel" class:online={codexWeb?.ready}>
+        <div class="mn-panel-cap">
+          <div><span>MNELYRA</span><strong>{zh ? "网页模型接入" : "Web model bridge"}</strong></div>
+          <b class:online={codexWeb?.ready}>
+            {codexWeb?.ready ? (codexWeb.browserBusy ? (zh ? "任务中" : "BUSY") : (zh ? "已接入" : "READY")) : (codexWeb?.routeInstalled ? (zh ? "待恢复" : "RECOVER") : (zh ? "未接入" : "NOT CONNECTED"))}
+          </b>
+        </div>
+
+        <div class="mn-codex-route-line" aria-label={zh ? "网页模型链路" : "Web model path"}>
+          <span>CODEX</span><i>→</i><span>127.0.0.1:17841</span><i>→</i><span>CHATGPT WEB</span>
+        </div>
+
+        <div class="mn-codex-health-grid">
+          <div class:ok={Boolean(codexWeb?.routeInstalled && codexWeb?.routeActive)}>
+            <i></i><span>{zh ? "Codex 路由" : "Codex route"}</span><b>{codexWeb?.routeInstalled && codexWeb?.routeActive ? (zh ? "已接入" : "READY") : (zh ? "未接入" : "DOWN")}</b>
+          </div>
+          <div class:ok={Boolean(codexWeb?.proxyReady)}>
+            <i></i><span>Responses</span><b>{codexWeb?.proxyReady ? "17841 OK" : "17841 DOWN"}</b>
+          </div>
+          <div class:ok={Boolean(codexWeb?.browserReady)}>
+            <i></i><span>{zh ? "ChatGPT 浏览器" : "ChatGPT browser"}</span><b>{codexWeb?.browserBusy ? (zh ? "任务中" : "BUSY") : codexWeb?.browserReady ? (zh ? "已就绪" : "READY") : (zh ? "未就绪" : "DOWN")}</b>
+          </div>
+          <div class:ok={Boolean(!codexTunnelRequired || codexWeb?.tunnelReady)}>
+            <i></i><span>OpenAI Tunnel</span><b>{!codexTunnelRequired ? (zh ? "无需" : "N/A") : codexWeb?.tunnelReady ? (zh ? "已就绪" : "READY") : (zh ? "未就绪" : "DOWN")}</b>
+          </div>
+        </div>
+
+        <div class="mn-tunnel-live-row mn-codex-status-row">
           <div class="mn-tunnel-live-copy">
-            <i class:ok={status?.healthy}></i>
+            <i class:ok={codexWeb?.ready}></i>
             <div>
-              <strong>{status?.ready ? (zh ? "安全连接已可用" : "Secure connection is ready") : (zh ? "正在建立安全连接" : "Establishing secure connection")}</strong>
-              <span>{zh ? "ChatGPT 可通过 Mnelyra 访问当前工作区。" : "ChatGPT can reach the active workspace through Mnelyra."}</span>
+              <strong>{zh ? "网页模型" : "Web models"}</strong>
+              <span>
+                {#if codexWeb?.ready}
+                  {#if codexWeb.browserBusy}
+                    {zh ? `正在运行 Codex 任务 · ${codexWeb.version || "runtime"}` : `Serving a Codex turn · ${codexWeb.version || "runtime"}`}
+                  {:else}
+                    {zh ? `已接入 Codex · ${codexWeb.version || "runtime"}` : `Connected to Codex · ${codexWeb.version || "runtime"}`}
+                  {/if}
+                {:else if codexWeb?.routeInstalled && codexWeb?.routeActive}
+                  {zh ? "Codex 路由已安装，但网页模型运行时未就绪。" : "The Codex route is installed, but the Web-model runtime is not ready."}
+                {:else if codexWeb?.cliInstalled}
+                  {zh ? "网页模型运行时已找到，Codex 路由尚未就绪。" : "Web-model runtime found; Codex routing is not ready."}
+                {:else}
+                  {zh ? "未检测到网页模型运行时。" : "Web-model runtime was not detected."}
+                {/if}
+              </span>
+              {#if codexWeb?.mode}
+                <small>{codexWeb.mode.toUpperCase()}{codexWeb.appName ? ` · ${codexWeb.appName}` : ""}{codexWeb.tunnelId ? ` · ${codexWeb.tunnelId}` : ""}</small>
+              {/if}
             </div>
           </div>
-          <button class="mn-mini-action danger" type="button" disabled={busy} onclick={() => void stop()}><CircleStop size={12} /> {zh ? "断开" : "Stop"}</button>
+          {#if !codexWeb?.ready && codexWeb?.launcherInstalled && codexWeb?.cliInstalled}
+            <button class="mn-mini-action primary" type="button" disabled={busy} onclick={() => void recoverCodexWeb()}><Play size={12} /> {codexWeb?.routeInstalled ? (zh ? "恢复" : "Recover") : (zh ? "安装到 Codex" : "Install in Codex")}</button>
+          {/if}
         </div>
-      {:else}
-        <div class="mn-tunnel-empty">
-          <div class="mn-tunnel-empty-copy">
-            <ShieldCheck size={18} />
-            <div>
-              <strong>{status?.configured ? (zh ? "安全连接未启动" : "Secure connection is stopped") : (zh ? "安全连接尚未配置" : "Secure connection is not configured")}</strong>
-              <span>{zh ? "这条连接只服务 OpenAI 平台；左侧公网路由不受影响。" : "This path is OpenAI-specific. Public routing on the left remains independent."}</span>
-            </div>
-          </div>
-          <div class="mn-tunnel-actions">
-            <button class="mn-mini-action primary" type="button" disabled={busy} onclick={() => void connect()}><Play size={12} /> {zh ? "启动" : "Start"}</button>
-          </div>
-        </div>
-      {/if}
-      <details class="mn-advanced-connection">
-        <summary>{zh ? "高级配置" : "Advanced setup"}</summary>
-        <div class="mn-connector-form">
-          <label>
-            <span>{zh ? "托管别名" : "MANAGED ALIAS"}</span>
-            <input bind:value={alias} placeholder="mnelyra" disabled={busy} />
-          </label>
-          <label>
-            <span>{zh ? "Tunnel ID" : "TUNNEL ID"}</span>
-            <input bind:value={tunnelId} placeholder="tunnel_…" disabled={busy} autocomplete="off" />
-          </label>
-          <label class="wide">
-            <span>{zh ? "OpenAI API Key" : "OPENAI API KEY"}</span>
-            <input type="password" bind:value={runtimeApiKey} placeholder={settings?.hasRuntimeKey ? (zh ? "已保存 · 留空保持不变" : "saved · leave blank to keep") : (zh ? "粘贴 OpenAI API Key" : "paste OpenAI API key")} autocomplete="off" disabled={busy} />
-          </label>
-        </div>
-        <div class="mn-connector-actions">
-          <button class="mn-mini-action" type="button" disabled={busy} onclick={() => void save()}><Save size={12} /> {zh ? "保存配置" : "Save settings"}</button>
-        </div>
-      </details>
 
-      <div class="mn-connector-links">
-        <button type="button" onclick={() => void openUrl("https://platform.openai.com/settings/organization/tunnels")}>{zh ? "OpenAI Tunnels" : "OpenAI Tunnels"} <ExternalLink size={11} /></button>
-        <button type="button" onclick={() => void openUrl("https://platform.openai.com/settings/organization/api-keys")}>OpenAI API Keys <ExternalLink size={11} /></button>
-        <button type="button" onclick={() => void openUrl("https://chatgpt.com/#settings/Connectors")}>ChatGPT Connectors <ExternalLink size={11} /></button>
-      </div>
+        <details class="mn-advanced-connection mn-codex-tunnel-setup">
+          <summary>{zh ? "Full 模式 · OpenAI Tunnel 安装参数" : "Full mode · OpenAI Tunnel setup"}</summary>
+          <p>{zh ? "Full 模式使用 OpenAI Tunnel 完成工具回路。已有配置会直接复用。" : "Full mode uses OpenAI Tunnel for the tool return path. Existing setup is reused."}</p>
+          <div class="mn-connector-form">
+            <label>
+              <span>Tunnel ID</span>
+              <input bind:value={tunnelId} placeholder={codexWeb?.tunnelId || "tunnel_…"} disabled={busy} autocomplete="off" />
+            </label>
+            <label>
+              <span>OpenAI Tunnel Runtime Key</span>
+              <input type="password" bind:value={runtimeApiKey} placeholder={(codexWeb?.tunnelKeyConfigured || settings?.hasRuntimeKey) ? (zh ? "已配置 · 留空保持不变" : "configured · leave blank to keep") : (zh ? "粘贴 Tunnels Read + Use Runtime Key" : "paste a Tunnels Read + Use Runtime Key")} autocomplete="off" disabled={busy} />
+            </label>
+          </div>
+          <div class="mn-connector-actions">
+            <button class="mn-mini-action" type="button" disabled={busy} onclick={() => void saveTunnelSetup()}><Save size={12} /> {zh ? "保存" : "Save"}</button>
+          </div>
+          <div class="mn-connector-links">
+            <button type="button" onclick={() => void openUrl("https://platform.openai.com/settings/organization/tunnels")}>OpenAI Tunnels <ExternalLink size={11} /></button>
+            <button type="button" onclick={() => void openUrl("https://platform.openai.com/settings/organization/api-keys")}>Runtime Keys <ExternalLink size={11} /></button>
+            <button type="button" onclick={() => void openUrl("https://chatgpt.com/#settings/Connectors")}>ChatGPT Connectors <ExternalLink size={11} /></button>
+          </div>
+        </details>
       </section>
-
     </div>
   </div>
 </section>

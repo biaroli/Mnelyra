@@ -4,10 +4,10 @@
 
 <h1 align="center">Mnelyra</h1>
 
-<h3 align="center">让 ChatGPT、Claude 和任意 MCP 客户端，共用同一个本地工作区与同一份项目记忆。</h3>
+<h3 align="center">让 ChatGPT、Codex、Claude Code 共用同一个本地工作区，并把 ChatGPT Web 模型接进 Codex。</h3>
 
 <p align="center">
-  <strong>上游可以直接通过 MCP 读写文件、运行命令和测试；还可以把 ChatGPT Web 订阅作为另一条模型通道接进工作流。</strong>
+  <strong>网页端可以直接调用本地文件、命令、Git 和测试工具；Codex 也可以选择 ChatGPT Web 模型。Mnelyra 负责连接、恢复、工作区记忆和上下文设置。</strong>
 </p>
 
 <p align="center">
@@ -21,41 +21,23 @@
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0">
 </p>
 
-Mnelyra 把一个真实的本地项目目录变成所有上游 AI 都能共同使用的工作区。ChatGPT、Claude 或其他 MCP 客户端可以直接从网页读取和修改文件、搜索项目、应用 Patch、执行命令和测试、检查 Git、查看图片。
+Mnelyra 管两条连接方向。ChatGPT、Claude 和其他 MCP 客户端可以通过远程 MCP 地址进入当前 Workspace，直接读取和修改文件、搜索项目、应用 Patch、执行命令和测试、检查 Git、查看图片。原生 Codex 则可以通过本机 Responses bridge 使用当前 ChatGPT 账号可用的 Web 模型。
 
-工作区同时也是记忆边界。你可以从一个上游切到另一个上游，开发历史、当前焦点、最近变化和未完成事项仍然跟着项目走，而不是锁死在某个聊天窗口或某一家模型里。
-
-![Mnelyra 当前界面](static/readme/mnelyra-connections.png)
-
-> 所有 README 截图都由当前 Mnelyra production UI 在隔离演示环境中生成。项目名、路径、域名、Client ID、Token 和密钥均为虚构数据，不包含开发者本机内容。
-
-## 为什么用 Mnelyra
-
-| ChatGPT Web 作为额外模型通道 | 一个工作区，共享一份记忆 | 直接操作项目 |
-| --- | --- | --- |
-| 可选接入 ChatGPT Web bridge，把你自己的 ChatGPT Web 订阅作为另一条模型通道。 | ChatGPT、Claude 和其他 MCP 上游围绕同一个 Workspace 工作，历史与恢复状态跟着项目走。 | 任何兼容 MCP 的上游都可以直接使用 Mnelyra 的文件、命令、Git、测试、图片和历史工具操作工作区。 |
-
-## 功能一览
-
-### 一个入口接所有上游
-
-上游只需要连 Mnelyra。OpenAI 安全连接、Cloudflare 和 FRP 都集中在连接页；工作区切换发生在 Mnelyra 后面，所以不需要每换一个项目就重新配置 ChatGPT、Claude 或其他 MCP 客户端。
-
-### 应用级控制不塞进 Workspace 页面
-
-左侧 Workspace 只负责切换当前项目根目录。共享 MCP 地址与 OAuth/Bearer 授权集中在“认证”，运行日志和健康检查放在“通用”，公网路由仍在“连接”。这些控制应用到所有工作区，不需要每个项目重复配置。
+两条链路共用同一个本地项目边界。Workspace 也是记忆边界，切换客户端以后，开发历史、当前焦点、最近变化和未完成事项仍然跟着项目走。
 
 ![Mnelyra 通用设置](static/readme/mnelyra-general.png)
 
-### 固定连接身份
+> 所有 README 截图都由当前 Mnelyra production UI 在隔离演示环境中生成。项目名、路径、域名、Client ID、Token 和密钥均为虚构数据，不包含开发者本机内容。
 
-支持 OAuth 和 Bearer Token。OAuth 使用 PKCE；兼容客户端可以自动注册，真正授权前会要求输入 Mnelyra 桌面端显示的授权码。切换项目不需要重新连接客户端。
+## Mnelyra 实际解决什么
 
-![Mnelyra 认证页](static/readme/mnelyra-authentication.png)
+客户端只需要配置一次 Mnelyra。Cloudflare 或 FRP 负责把当前本地 MCP 服务提供给远端客户端；切换 Workspace 只改变项目根目录，不会让 ChatGPT 或 Claude 跟着换地址、重新配一遍连接。
 
-### 直接改项目
+ChatGPT Web 也可以成为本地项目客户端。连接 Mnelyra 的自定义 MCP app 后，网页里的对话可以调用文件、Patch、命令、测试、Git、图片和 history 工具，操作范围由当前 Workspace 与 Mnelyra 权限设置决定。
 
-MCP 本身就提供文件读取与修改、搜索、Patch、命令执行、测试、Git、图片和历史工具。当前 Workspace 就是这些工具的项目根目录。
+另一边，Mnelyra 可以把 ChatGPT Web 模型装进原生 Codex 的模型列表。网页模型链路包含内置浏览器、Responses proxy、Codex route；Full 模式还包含 OpenAI Tunnel。Mnelyra 检查这些环节的真实状态，在启动和断线后恢复需要的进程。Codex 正在占用浏览器执行任务时会显示“正在运行 Codex 任务”，不会把正常忙碌误报成掉线。
+
+上下文设置也放在 Mnelyra 里。**自动**模式清除旧 bridge 写入的固定上下文与总结阈值，由 Codex 使用当前模型默认值和自己的压缩机制；**1M** 会写入 `1,000,000` 上下文和 `900,000` 自动总结阈值；**自定义**可以直接填写两个值。这样不需要再手改 Codex 配置文件。
 
 ## 工作方式
 
@@ -74,7 +56,7 @@ MCP 本身就提供文件读取与修改、搜索、Patch、命令执行、测�
 | Windows 10/11 x64 | `Mnelyra_*_x64-setup.exe` |
 | macOS Intel + Apple Silicon | `Mnelyra_*_universal.dmg` |
 
-macOS 当前没有 Apple Developer notarization，首次打开时可能需要在“系统设置 → 隐私与安全性”中确认。
+macOS 当前没有 Apple Developer notarization，首次打开时可能需要在 系统设置 → 隐私与安全性 中确认。
 
 ### 2. 添加工作区
 
@@ -86,10 +68,10 @@ macOS 当前没有 Apple Developer notarization，首次打开时可能需要在
 
 | 场景 | 连接方式 |
 | --- | --- |
-| OpenAI / ChatGPT 安全 MCP 链路 | OpenAI 安全连接 |
 | 固定公网域名 | Cloudflare Named Tunnel |
 | 临时测试地址 | Cloudflare Quick Tunnel |
 | 自托管反向代理 | FRP |
+| 在原生 Codex 中使用 ChatGPT Web 模型 | 网页模型接入；Full 模式需要 OpenAI Tunnel |
 
 本机 MCP 默认地址类似：
 
@@ -97,11 +79,11 @@ macOS 当前没有 Apple Developer notarization，首次打开时可能需要在
 http://127.0.0.1:28766/mcp
 ```
 
-### 4. 配置认证并连接上游
+### 4. 配置认证
 
 打开 **设置 → 认证**。公网 MCP 推荐 OAuth；也可以使用 Bearer Token。使用 OAuth 时，在浏览器授权页输入 Mnelyra 显示的授权码即可。
 
-把 Mnelyra 显示的 `/mcp` 地址填入 ChatGPT、Claude 或其他支持自定义 MCP 的客户端即可。第一次连接可以检查：
+把 Mnelyra 显示的 `/mcp` 地址填入支持自定义 MCP 的客户端即可。第一次连接可以检查：
 
 ```text
 server_info
@@ -111,17 +93,39 @@ git_status
 
 `get_default_cwd` 应该指向当前选择的 Workspace，`git_status` 应该读取同一个项目。
 
-## ChatGPT Web 通道
+## 把 Mnelyra 接到 ChatGPT 网页版
 
-配合 ChatGPT Web bridge，可以把 ChatGPT 网页订阅作为额外模型通道，用在现有 Workspace、MCP 工具和项目记忆之上。
+ChatGPT 不能直接连接 `127.0.0.1` 上的 MCP。先在 Mnelyra 的 **连接** 页面配置 Cloudflare 或 FRP，拿到可从外部访问的 `/mcp` 地址。
 
-这条路径适合在单一 API 或账号额度紧张时切换模型通道，但它仍然使用你自己的 ChatGPT 账号与订阅能力，也受 ChatGPT 当前账号权限、产品能力和网页界面变化影响。
+在 ChatGPT 中启用 **Developer mode**，然后创建自定义 app，并把它连接到 Mnelyra 的 `/mcp` 地址。
+
+进入 **Apps → Create**，名称填 `Mnelyra`，MCP Server URL 填 Mnelyra 提供的远程 `/mcp` 地址，并选择对应认证方式。点击 **Scan Tools**。如果使用 OAuth，浏览器会进入授权流程；按提示完成授权后等待工具扫描结束，再点击 **Create**。
+
+创建完成后，在聊天输入框的 **+ → More** 中选择 Mnelyra，就可以从 ChatGPT 调用当前 Workspace 的工具。以后 Mnelyra 增删了 MCP 工具，需要回到 **Settings → Apps** 刷新这个 app，让 ChatGPT 重新读取工具列表。
+
+![Mnelyra 认证页](static/readme/mnelyra-authentication.png)
+
+OpenAI 的当前说明见 [Developer mode and MCP apps in ChatGPT](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt) 和 [Apps in ChatGPT](https://help.openai.com/en/articles/11487775-apps-in-chatgpt)。
+
+## 把 ChatGPT Web 模型接进 Codex
+
+Mnelyra 可以把原生 Codex 接到本机 Responses bridge，并把当前账号可用的 `ChatGPT Web — …` 模型加入 Codex 模型列表。安装完成后，这些模型和 Codex 原生模型一起出现在模型选择器里，不需要另开一套工作界面。
+
+Mnelyra 管理 Codex 路由、内置浏览器和 `127.0.0.1:17841` Responses proxy。**Full** 模式同时使用 OpenAI Tunnel，适合需要完整工具链的 Codex 任务；`browser-only` 不启动 Tunnel。
+
+已有 `codex-chatgpt-web` setup 可以直接恢复或重装路由。Full setup 复用 Tunnel ID 和 Runtime Key，Runtime Key 通过临时文件传递。首次使用需要完成 ChatGPT 浏览器登录。
+
+可用模型和有效上下文取决于当前 ChatGPT 账号与通道。Mnelyra 启动时会恢复已有链路，连接页也可以手动恢复；链路状态来自实际 route/doctor 检查，而不是只看某个进程有没有启动。
+
+### Codex 上下文与自动总结
+
+在 **设置 → 通用 → 开发者模式** 中可以配置 Codex 的 `model_context_window` 与 `model_auto_compact_token_limit`。**自动**是推荐默认值：Mnelyra 清除两个覆盖项，把上下文和压缩交给 Codex。0.2.6 同时移除了旧 Web bridge 对 High/Medium 写死的 `140K / 125K` 限制。需要固定大窗口时可以选择 **1M**，或用 **自定义**明确填写上下文和自动总结阈值。最终有效上限仍由当前模型和通道决定。
 
 ## 工作区记忆
 
-Mnelyra 的记忆跟 Workspace 走。不同上游可以围绕同一个项目继续工作，不需要把“记忆”绑定到某一个 ChatGPT 或 Claude 会话。
+Mnelyra 的记忆跟 Workspace 走。不同上游可以围绕同一个项目继续工作，记忆不绑定某一个 ChatGPT 或 Claude 会话。
 
-“记忆”页面本身是给人看的观测面：显示从持久历史中派生出来的当前焦点、最近变化、未完成项，以及 provider 真正提供的可恢复 checkpoint。真正负责跨客户端连续性的仍然是持久 history 档案和下面这些 history 工具；这个页面不是另一套独立记忆库。
+记忆页面显示当前焦点、最近变化、未完成项和可恢复 checkpoint。跨客户端连续性由持久 history 档案和下面的 history 工具提供。
 
 公开的 history 工具包括：
 
@@ -160,10 +164,6 @@ https://mcp.example.com/mcp
 ### FRP
 
 已有 FRPS 服务端时，在连接页填写服务器、端口、子域名和 Token。Mnelyra 只维护当前应用级 FRP 路由，不需要为每个工作区重复建配置。
-
-### OpenAI 安全连接
-
-连接页可以保存 Tunnel ID 和 OpenAI API Key，并建立 OpenAI 平台使用的安全 MCP 链路。该专线使用内部隧道凭证，不再叠加 Mnelyra OAuth；它与普通 Cloudflare / FRP 公网路由相互独立。
 
 ## 从源码运行
 

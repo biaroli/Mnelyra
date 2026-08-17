@@ -141,6 +141,19 @@ pub async fn get_codex_context_policy(state: State<'_, AppState>) -> AppResult<s
 }
 
 #[tauri::command]
+pub async fn set_codex_context_policy(
+    state: State<'_, AppState>,
+    context_window: Option<u64>,
+    auto_compact_token_limit: Option<u64>,
+) -> AppResult<serde_json::Value> {
+    state
+        .codex_app_server
+        .set_context_policy(context_window, auto_compact_token_limit)
+        .await
+        .map_err(AppError::Message)
+}
+
+#[tauri::command]
 pub async fn set_permission_ceiling(state: State<'_, AppState>, mode: String) -> AppResult<()> {
     if !matches!(mode.as_str(), "automatic" | "read_only" | "custom") {
         return Err(AppError::Message(format!(

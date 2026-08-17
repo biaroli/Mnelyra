@@ -4,10 +4,10 @@
 
 <h1 align="center">Mnelyra</h1>
 
-<h3 align="center">One local workspace and one project memory for ChatGPT, Claude, and any MCP-compatible client.</h3>
+<h3 align="center">One local workspace for ChatGPT, Codex, and Claude Code, with ChatGPT Web models available inside Codex.</h3>
 
 <p align="center">
-  <strong>Remote clients can edit files, run commands, and test projects directly through MCP. An optional ChatGPT Web bridge can also add your ChatGPT Web subscription as another model path.</strong>
+  <strong>ChatGPT can call local file, shell, Git, and test tools through MCP. Codex can also select ChatGPT Web models. Mnelyra manages connections, recovery, workspace memory, and context settings.</strong>
 </p>
 
 <p align="center">
@@ -21,41 +21,23 @@
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0">
 </p>
 
-Mnelyra turns a real local project directory into a workspace that multiple AI clients can share. ChatGPT, Claude, or any compatible MCP client can read and edit files, search the project, apply patches, run commands and tests, inspect Git, and view images directly from the remote chat surface.
+Mnelyra manages two connection directions. ChatGPT, Claude, and other MCP clients can enter the active Workspace through a remote MCP endpoint and read or edit files, search the project, apply patches, run commands and tests, inspect Git, and view images. Native Codex can use a local Responses bridge to reach the ChatGPT Web models available to the signed-in account.
 
-The Workspace is also the memory boundary. Move from one upstream client to another and the project history, current focus, recent changes, and open work can stay with the project instead of being trapped in one chat window or one model provider.
-
-![Current Mnelyra UI](static/readme/mnelyra-connections.png)
-
-> Every README screenshot is generated from the current Mnelyra production UI in an isolated demo environment. Project names, paths, domains, Client IDs, tokens, and credentials are fictional; no developer machine data is captured.
-
-## Why Mnelyra
-
-| ChatGPT Web as another model path | One workspace, shared memory | Direct project control |
-| --- | --- | --- |
-| Optionally connect a ChatGPT Web bridge and use your own ChatGPT Web subscription as an additional model path. | ChatGPT, Claude, and other MCP upstreams can work around the same Workspace while project history and recovery state stay with that Workspace. | Any MCP-compatible upstream can operate the Workspace directly through Mnelyra's file, shell, Git, test, image, and history tools. |
-
-## Feature tour
-
-### One entry point for every upstream
-
-Upstream clients connect to Mnelyra once. OpenAI secure connection, Cloudflare, and FRP are managed from the Connections page; Workspace switching happens behind that connection, so changing projects does not mean rebuilding every ChatGPT, Claude, or MCP client configuration.
-
-### Application controls stay outside the Workspace
-
-Workspace items only switch the active project root. The shared MCP endpoint and OAuth/Bearer credentials live under Authentication, runtime logs and health live under General, and public routing lives under Connections. These controls apply across imported Workspaces instead of being rebuilt project by project.
+Both paths share the same local project boundary. The Workspace is also the memory boundary, so project history, current focus, recent changes, and open work stay with the project when the client changes.
 
 ![Mnelyra General settings](static/readme/mnelyra-general.png)
 
-### Stable connection identity
+> Every README screenshot is generated from the current Mnelyra production UI in an isolated demo environment. Project names, paths, domains, Client IDs, tokens, and credentials are fictional; no developer machine data is captured.
 
-OAuth and bearer token authentication are supported. OAuth uses PKCE; compatible clients can register automatically, and Mnelyra asks for the authorization code shown in the desktop app before granting access. Switching projects does not require reconnecting the client.
+## What Mnelyra handles
 
-![Mnelyra Authentication](static/readme/mnelyra-authentication.png)
+Clients only need one Mnelyra connection. Cloudflare or FRP can expose the active local MCP service to a remote client. Switching Workspace changes the project root without forcing ChatGPT or Claude onto a new URL or a new client configuration.
 
-### Direct project control
+ChatGPT Web can act as a local project client through a custom MCP app. Once connected, a browser conversation can call Mnelyra's file, patch, shell, test, Git, image, and history tools. The active Workspace and Mnelyra permission settings still define the boundary.
 
-MCP exposes file reads and edits, search, patches, commands, tests, Git, images, and history tools rooted at the active Workspace.
+Mnelyra can also install ChatGPT Web models into native Codex. That path includes the embedded browser, Responses proxy, and Codex route; Full mode also uses OpenAI Tunnel. Mnelyra checks the real state of each part and recovers required processes at startup or after a disconnect. When Codex is actively using the browser, Mnelyra reports an active Codex task instead of treating the busy browser as an outage.
+
+Context controls live in Mnelyra as well. **Automatic** removes fixed context and compaction overrides so Codex uses the current model defaults and its own compaction behavior. **1M** writes a `1,000,000`-token context window and a `900,000`-token auto-compaction threshold. **Custom** lets you set both values directly, without hand-editing Codex configuration files.
 
 ## How it fits together
 
@@ -86,10 +68,10 @@ Open **Connections**:
 
 | Use case | Path |
 | --- | --- |
-| OpenAI / ChatGPT secure MCP path | OpenAI secure connection |
 | Stable public hostname | Cloudflare Named Tunnel |
 | Temporary testing | Cloudflare Quick Tunnel |
 | Self-hosted reverse proxy | FRP |
+| Use ChatGPT Web models inside native Codex | Web model bridge; Full mode requires OpenAI Tunnel |
 
 The local MCP endpoint is typically:
 
@@ -97,11 +79,11 @@ The local MCP endpoint is typically:
 http://127.0.0.1:28766/mcp
 ```
 
-### 4. Configure authentication and connect a client
+### 4. Configure authentication
 
 Open **Settings → Authentication**. OAuth is recommended for a public MCP endpoint; bearer token is also available. For OAuth, copy the Mnelyra authorization code when the browser authorization page asks for it.
 
-Enter the `/mcp` URL shown by Mnelyra into ChatGPT, Claude, or another client that supports custom MCP servers. A first connection check can call:
+Enter the `/mcp` URL shown by Mnelyra into a client that supports custom MCP servers. A first connection check can call:
 
 ```text
 server_info
@@ -111,17 +93,39 @@ git_status
 
 `get_default_cwd` should resolve to the active Workspace and `git_status` should report the same project.
 
-## ChatGPT Web path
+## Connect Mnelyra to ChatGPT Web
 
-With the ChatGPT Web bridge, a ChatGPT Web subscription can become an additional model path on top of the same Workspace, MCP tools, and project memory.
+ChatGPT cannot connect directly to an MCP server on `127.0.0.1`. In Mnelyra, configure Cloudflare or FRP from **Connections** and copy the externally reachable `/mcp` endpoint.
 
-This can provide another model path when one API or account quota is constrained, but it still uses your own ChatGPT account and the capabilities available to that account. Browser integration can also be affected by changes to the ChatGPT web UI.
+Enable **Developer mode** in ChatGPT, then create a custom app and connect it to the Mnelyra `/mcp` endpoint.
+
+Open **Apps → Create**, name the app `Mnelyra`, and paste Mnelyra's remote `/mcp` endpoint as the MCP Server URL. Choose the matching authentication method, then click **Scan Tools**. If the server uses OAuth, complete the authorization prompt and wait for tool scanning to finish. Click **Create** when the tools have loaded.
+
+In a chat, use **+ → More** to select Mnelyra. ChatGPT can then call the tools for the active Workspace. If Mnelyra's MCP tool catalog changes later, refresh the app from **Settings → Apps** so ChatGPT reads the updated tools.
+
+![Mnelyra Authentication](static/readme/mnelyra-authentication.png)
+
+OpenAI's current setup notes are in [Developer mode and MCP apps in ChatGPT](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt) and [Apps in ChatGPT](https://help.openai.com/en/articles/11487775-apps-in-chatgpt).
+
+## Add ChatGPT Web models to Codex
+
+Mnelyra can route native Codex through a local Responses bridge and add the account-eligible `ChatGPT Web — …` models to the Codex model list. Once installed, those models appear alongside native Codex models in the normal model selector rather than requiring a separate working UI.
+
+Mnelyra manages the Codex route, embedded browser, and the `127.0.0.1:17841` Responses proxy. **Full** mode also uses OpenAI Tunnel for tool-enabled Codex work. `browser-only` does not start Tunnel.
+
+An existing `codex-chatgpt-web` setup can be recovered or used to reinstall the route. Full setup reuses the Tunnel ID and Runtime Key. The Runtime Key is passed through a temporary file. First use requires ChatGPT browser sign-in.
+
+Available models and effective context depend on the signed-in ChatGPT account and route. Mnelyra restores an existing path at startup and also exposes manual recovery from Connections. Readiness comes from the live route/doctor checks rather than the presence of a single process.
+
+### Codex context and auto-compaction
+
+In **Settings → General → Developer mode**, Mnelyra configures Codex `model_context_window` and `model_auto_compact_token_limit`. **Automatic** is the recommended default: Mnelyra clears both overrides and leaves context sizing and compaction to Codex. Version 0.2.6 also removes the old Web bridge's fixed `140K / 125K` limits for High/Medium. Use **1M** when you want the explicit `1,000,000 / 900,000` profile, or **Custom** when you want to set both values yourself. The active model and route still determine the effective ceiling.
 
 ## Workspace memory
 
-Mnelyra memory follows the Workspace. Different upstream clients can continue work on the same project without treating one ChatGPT or Claude conversation as the only source of project continuity.
+Mnelyra memory follows the Workspace. Different upstream clients can continue work on the same project with the same project memory.
 
-The Memory page is the human-readable observability surface for that system: it shows the derived current focus, recent changes, open work, and any recoverable provider checkpoints. The actual continuity mechanism is the durable history archive plus the history tools below; the UI is not a separate second memory store.
+The Memory page shows current focus, recent changes, open work, and recoverable provider checkpoints. Durable history archives and the history tools below provide cross-client continuity.
 
 The public history tools are:
 
@@ -159,11 +163,7 @@ https://mcp.example.com/mcp
 
 ### FRP
 
-If you operate an FRPS server, enter its server, port, subdomain, and token on the Connections page. Mnelyra maintains one application-level FRP route rather than a profile library per Workspace.
-
-### OpenAI secure connection
-
-The Connections page can store a Tunnel ID and OpenAI API Key and start the secure MCP path used by the OpenAI platform. This path uses its private tunnel credential and does not add a second Mnelyra OAuth login; it is independent from normal Cloudflare/FRP public routing.
+If you operate an FRPS server, enter its server, port, subdomain, and token on the Connections page. Mnelyra maintains one application-level FRP route for all Workspaces.
 
 ## Run from source
 

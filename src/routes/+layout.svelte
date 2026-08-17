@@ -1,6 +1,6 @@
 <script lang="ts">
   import "../mnelyra.css";
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
   import { confirm, open } from "@tauri-apps/plugin-dialog";
@@ -36,6 +36,7 @@
   import { showToast } from "$lib/stores/toast";
   import { startUiMemoryGuard } from "$lib/ui-memory-guard";
   import { startCloseGuard } from "$lib/close-guard";
+  import { startBackgroundServices } from "$lib/api/startup";
   import CloseConfirmDialog from "$lib/components/CloseConfirmDialog.svelte";
   import {
     checkForUpdates,
@@ -55,14 +56,19 @@
   let contextX = $state(0);
   let contextY = $state(0);
   let authorityRefreshInFlight = false;
+  let authorityRefreshGeneration = 0;
   let providerRefreshInFlight = false;
+  let workspaceSwitchGeneration = 0;
+  let switchingWorkspaceId = $state<string | null>(null);
   const zh = $derived($uiLocale === "zh-CN");
 
   async function refreshAuthority() {
-    if (authorityRefreshInFlight) return;
+    if (authorityRefreshInFlight || switchingWorkspaceId) return;
+    const generation = authorityRefreshGeneration;
     authorityRefreshInFlight = true;
     try {
       const active = await getActiveWorkspaceState();
+      if (generation !== authorityRefreshGeneration || switchingWorkspaceId) return;
       activeWorkspaceState.set(active);
       const ids = new Set<string>();
       if (active.workspaceId) ids.add(active.workspaceId);
@@ -72,6 +78,7 @@
       const entries = await Promise.all(
         [...ids].map(async (id) => [id, await getWorkspaceActivity(id)] as const),
       );
+      if (generation !== authorityRefreshGeneration || switchingWorkspaceId) return;
       workspaceActivity.update((current) => {
         const next = { ...current };
         for (const [id, activity] of entries) next[id] = activity;
@@ -81,6 +88,63 @@
       // Keep the last proven backend snapshot across transient IPC read failures.
     } finally {
       authorityRefreshInFlight = false;
+    }
+  }
+
+  $effect(() => {
+    const id = $page.params.id;
+    if ($page.url.pathname.startsWith("/workspace/") && id) {
+      untrack(() => void activateRouteWorkspace(id));
+    }
+  });
+
+  async function activateRouteWorkspace(id: string) {
+    const generation = ++workspaceSwitchGeneration;
+    authorityRefreshGeneration += 1;
+    switchingWorkspaceId = id;
+
+    try {
+      if ($activeWorkspaceState.workspaceId !== id) {
+        const active = await activateWorkspace(id);
+        if (generation !== workspaceSwitchGeneration || $page.params.id !== id) return;
+        activeWorkspaceState.set(active);
+      }
+
+      const [activity, mcp] = await Promise.all([
+        getWorkspaceActivity(id),
+        getRuntimeStatus(id),
+      ]);
+      if (generation !== workspaceSwitchGeneration || $page.params.id !== id) return;
+      workspaceActivity.update((current) => ({ ...current, [id]: activity }));
+      mcpRuntimeStates.update((current) => ({ ...current, [id]: mcp.state }));
+    } catch (error) {
+      if (generation !== workspaceSwitchGeneration || $page.params.id !== id) return;
+      showToast(String(error), {
+        title: zh ? "工作区切换未完成" : "Workspace switch did not complete",
+        kind: "error",
+        duration: 9000,
+      });
+
+      try {
+        const active = await getActiveWorkspaceState();
+        if (
+          generation === workspaceSwitchGeneration
+          && $page.params.id === id
+          && active.workspaceId
+          && active.workspaceId !== id
+        ) {
+          activeWorkspaceState.set(active);
+          await goto(`/workspace/${active.workspaceId}`, { replaceState: true });
+        }
+      } catch {
+        // Keep the target route visible if the backend cannot provide a rollback snapshot.
+      }
+    } finally {
+      if (generation === workspaceSwitchGeneration) {
+        switchingWorkspaceId = null;
+        authorityRefreshGeneration += 1;
+        void refreshAuthority();
+      }
     }
   }
 
@@ -207,16 +271,7 @@
 
   async function openWorkspace(id: string) {
     try {
-      if ($activeWorkspaceState.workspaceId !== id) {
-        const active = await activateWorkspace(id);
-        activeWorkspaceState.set(active);
-        const [activity, mcp] = await Promise.all([
-          getWorkspaceActivity(id),
-          getRuntimeStatus(id),
-        ]);
-        workspaceActivity.update((current) => ({ ...current, [id]: activity }));
-        mcpRuntimeStates.update((current) => ({ ...current, [id]: mcp.state }));
-      }
+      if ($page.params.id === id && $page.url.pathname === `/workspace/${id}`) return;
       await goto(`/workspace/${id}`);
     } catch (error) {
       showToast(String(error), {
@@ -288,8 +343,16 @@
         }
       }
     })();
-    void checkStartupUpdate();
-    void refreshProviders();
+    let startupFrame = window.requestAnimationFrame(() => {
+      const boot = document.getElementById("mnelyra-boot");
+      if (boot) boot.dataset.ready = "true";
+      startupFrame = window.requestAnimationFrame(() => {
+        window.setTimeout(() => boot?.remove(), 140);
+        void startBackgroundServices();
+        window.setTimeout(() => void refreshProviders(), 450);
+        window.setTimeout(() => void checkStartupUpdate(), 2200);
+      });
+    });
     const authorityTimer = window.setInterval(() => {
       void refreshAuthority();
     }, 1200);
@@ -297,6 +360,7 @@
       void refreshProviders();
     }, 3000);
     return () => {
+      window.cancelAnimationFrame(startupFrame);
       window.clearInterval(authorityTimer);
       window.clearInterval(providerTimer);
       stopGuard();
@@ -356,7 +420,7 @@
       {#each $workspaces as workspace (workspace.id)}
         <WorkspaceNavItem
           workspace={workspace}
-          selected={$activeWorkspaceState.workspaceId === workspace.id}
+          selected={$page.params.id === workspace.id && $page.url.pathname.startsWith('/workspace/')}
           activeRoot={$activeWorkspaceState.workspaceId === workspace.id}
           activity={$workspaceActivity[workspace.id]}
           mcpState={$mcpRuntimeStates[workspace.id] ?? "stopped"}

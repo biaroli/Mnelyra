@@ -1878,9 +1878,102 @@ pre {
 
 .mn-connection-workbench {
   display: grid;
-  grid-template-columns: minmax(420px, 0.84fr) minmax(500px, 1.16fr);
-  gap: 10px;
+  grid-template-columns: minmax(460px, 1.08fr) minmax(390px, 0.92fr);
+  gap: 12px;
   align-items: start;
+}
+
+.mn-codex-bridge-panel {
+  min-width: 0;
+}
+
+.mn-codex-route-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.35fr) auto minmax(0, 1.2fr);
+  align-items: center;
+  gap: 7px;
+  margin: 12px;
+  padding: 10px;
+  border: 1px solid #172638;
+  border-radius: 6px;
+  background: #070d13;
+  color: #6d879f;
+  font: 10.5px/1.2 "Cascadia Code", Consolas, monospace;
+  text-align: center;
+}
+
+.mn-codex-route-line span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mn-codex-route-line i {
+  color: #3f6f98;
+  font-style: normal;
+}
+
+.mn-codex-health-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0 12px 12px;
+}
+
+.mn-codex-health-grid > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 9px;
+  border: 1px solid #172638;
+  border-radius: 6px;
+  background: #070d13;
+}
+
+.mn-codex-health-grid i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #465b6d;
+}
+
+.mn-codex-health-grid > div.ok i {
+  background: var(--mn-signal);
+  box-shadow: 0 0 7px rgba(47, 140, 255, 0.52);
+}
+
+.mn-codex-health-grid span {
+  overflow: hidden;
+  color: #7890a6;
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mn-codex-health-grid b {
+  color: #657d93;
+  font: 600 9.5px/1 "Cascadia Code", Consolas, monospace;
+}
+
+.mn-codex-health-grid > div.ok b {
+  color: #78bfff;
+}
+
+.mn-codex-status-row {
+  min-height: 86px;
+  border-top: 1px solid #172737;
+  border-bottom: 0;
+}
+
+.mn-codex-status-row small {
+  color: #526e86;
+  font: 10px/1.4 "Cascadia Code", Consolas, monospace;
+}
+
+.mn-codex-tunnel-setup {
+  margin-top: 0;
 }
 
 .mn-connection-telemetry-panel,

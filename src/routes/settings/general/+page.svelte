@@ -7,7 +7,7 @@
   import Tabs from "$lib/components/Tabs.svelte";
   import {
     getCodexContextPolicy,
-    setCodexAutoCompactLimit,
+    setCodexContextPolicy,
     setPermissionCeiling,
   } from "$lib/api/providers";
   import { getGlobalGeneral, setGlobalGeneral } from "$lib/api/settings";
@@ -27,7 +27,8 @@
   let compactBusy = $state(false);
   let permissionBusy = $state(false);
   let diagnosticsTab = $state<DiagnosticsTab>("logs");
-  let compactMode = $state<"auto" | "custom">("auto");
+  let contextMode = $state<"auto" | "one_million" | "custom">("auto");
+  let contextWindowInput = $state("");
   let compactLimitInput = $state("");
   const zh = $derived($uiLocale === "zh-CN");
   const activeProfile = $derived(
@@ -43,7 +44,13 @@
     return typeof value === "number" && Number.isFinite(value) ? value : null;
   }
 
+  function contextWindowFrom(policy: CodexConfigReadResponse | null): number | null {
+    const value = policy?.config?.model_context_window;
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+
   const compactLimit = $derived(compactLimitFrom(codexPolicy));
+  const contextWindow = $derived(contextWindowFrom(codexPolicy));
 
   async function refresh() {
     loading = true;
@@ -86,9 +93,15 @@
     compactPolicyLoading = true;
     try {
       const next = await getCodexContextPolicy();
+      const context = contextWindowFrom(next);
       const limit = compactLimitFrom(next);
       codexPolicy = next;
-      compactMode = limit == null ? "auto" : "custom";
+      contextMode = context == null && limit == null
+        ? "auto"
+        : context === 1_000_000 && limit === 900_000
+          ? "one_million"
+          : "custom";
+      contextWindowInput = context?.toString() ?? "";
       compactLimitInput = limit?.toString() ?? "";
     } catch (error) {
       codexPolicy = null;
@@ -107,21 +120,19 @@
     if (enabled) await loadCompactPolicy();
   }
 
-  async function saveCompactLimit(limit: number | null) {
+  async function saveContextPolicy(context: number | null, limit: number | null) {
     if (compactBusy) return;
     compactBusy = true;
     try {
-      await setCodexAutoCompactLimit(limit);
+      await setCodexContextPolicy(context, limit);
       await loadCompactPolicy(true);
-      showToast(
-        limit == null
-          ? (zh ? "已恢复 ChatGPT 自动总结。" : "ChatGPT automatic compaction restored.")
-          : (zh ? "自定义总结阈值已保存。" : "Custom compaction threshold saved."),
-        { title: zh ? "已保存" : "Saved", kind: "success" },
-      );
+      showToast(zh ? "Codex 上下文配置已保存。" : "Codex context settings saved.", {
+        title: zh ? "已保存" : "Saved",
+        kind: "success",
+      });
     } catch (error) {
       showToast(String(error), {
-        title: zh ? "总结策略保存失败" : "Failed to save compaction policy",
+        title: zh ? "上下文配置保存失败" : "Failed to save context settings",
         kind: "error",
         duration: 9000,
       });
@@ -130,25 +141,39 @@
     }
   }
 
-  async function chooseCompactMode(mode: "auto" | "custom") {
+  async function chooseContextMode(mode: "auto" | "one_million" | "custom") {
     if (mode === "custom") {
-      compactMode = "custom";
+      contextMode = "custom";
+      if (!contextWindowInput) contextWindowInput = contextWindow?.toString() || "1000000";
+      if (!compactLimitInput) compactLimitInput = compactLimit?.toString() || "900000";
       return;
     }
-    compactMode = "auto";
-    if (compactLimit != null) await saveCompactLimit(null);
+    contextMode = mode;
+    if (mode === "auto") {
+      if (contextWindow != null || compactLimit != null) await saveContextPolicy(null, null);
+      return;
+    }
+    await saveContextPolicy(1_000_000, 900_000);
   }
 
-  async function saveCustomCompactLimit() {
-    const value = Number(compactLimitInput);
-    if (!Number.isInteger(value) || value < 16_384) {
+  async function saveCustomContextPolicy() {
+    const context = Number(contextWindowInput);
+    const compact = Number(compactLimitInput);
+    if (!Number.isInteger(context) || context < 16_384) {
       showToast(
-        zh ? "请输入至少 16,384 的整数 token 阈值。" : "Enter an integer token threshold of at least 16,384.",
-        { title: zh ? "无效阈值" : "Invalid threshold", kind: "warning" },
+        zh ? "上下文窗口至少为 16,384。" : "Context window must be at least 16,384.",
+        { title: zh ? "无效配置" : "Invalid settings", kind: "warning" },
       );
       return;
     }
-    await saveCompactLimit(value);
+    if (!Number.isInteger(compact) || compact < 16_384 || compact >= context) {
+      showToast(
+        zh ? "自动总结阈值至少为 16,384，并且必须小于上下文窗口。" : "Auto-compaction must be at least 16,384 and lower than the context window.",
+        { title: zh ? "无效配置" : "Invalid settings", kind: "warning" },
+      );
+      return;
+    }
+    await saveContextPolicy(context, compact);
   }
 
   async function changePermissionCeiling(
@@ -210,7 +235,7 @@
         <label class="mn-settings-toggle-row">
           <div>
             <strong>{zh ? "我是开发者" : "Developer mode"}</strong>
-            <span>{zh ? "开启后在这里显示 ChatGPT 总结阈值设置。默认保持自动，不会改变现有行为。" : "Show ChatGPT compaction controls here. Automatic remains the default and enabling this does not change current behavior."}</span>
+            <span>{zh ? "显示 Codex 权限与上下文设置。开启本身不会修改配置。" : "Show Codex permission and context settings. Enabling this does not change them."}</span>
           </div>
           <input type="checkbox" checked={$developerMode} onchange={(event) => void changeDeveloperMode(event.currentTarget.checked)} />
           <i aria-hidden="true"></i>
@@ -260,37 +285,54 @@
           <div class="mn-developer-context-panel">
             <div class="mn-developer-context-head">
               <div>
-                <span>CHATGPT COMPACTION</span>
-                <strong>{zh ? "总结阈值" : "Compaction threshold"}</strong>
+                <span>CODEX CONTEXT</span>
+                <strong>{zh ? "上下文与总结" : "Context and compaction"}</strong>
               </div>
-              <b>{compactPolicyLoading ? (zh ? "读取中" : "LOADING") : compactMode === "auto" ? "AUTO" : "CUSTOM"}</b>
+              <b>{compactPolicyLoading ? (zh ? "读取中" : "LOADING") : contextMode === "auto" ? "AUTO" : contextMode === "one_million" ? "1M" : "CUSTOM"}</b>
             </div>
 
             <div class="mn-developer-context-body">
-              <div class="mn-compact-mode-switch" role="group" aria-label={zh ? "总结阈值模式" : "Compaction threshold mode"}>
+              <div class="mn-compact-mode-switch" role="group" aria-label={zh ? "Codex 上下文模式" : "Codex context mode"}>
                 <button
                   type="button"
-                  class:active={compactMode === "auto"}
+                  class:active={contextMode === "auto"}
                   disabled={compactPolicyLoading || compactBusy}
-                  onclick={() => void chooseCompactMode("auto")}
+                  onclick={() => void chooseContextMode("auto")}
                 >{zh ? "自动" : "Automatic"}</button>
                 <button
                   type="button"
-                  class:active={compactMode === "custom"}
+                  class:active={contextMode === "one_million"}
                   disabled={compactPolicyLoading || compactBusy}
-                  onclick={() => void chooseCompactMode("custom")}
+                  onclick={() => void chooseContextMode("one_million")}
+                >1M</button>
+                <button
+                  type="button"
+                  class:active={contextMode === "custom"}
+                  disabled={compactPolicyLoading || compactBusy}
+                  onclick={() => void chooseContextMode("custom")}
                 >{zh ? "自定义" : "Custom"}</button>
               </div>
 
-              {#if compactMode === "custom"}
+              <p class="mn-compact-auto-copy">
+                {contextMode === "auto"
+                  ? (zh ? "交给 Codex。上下文使用当前模型默认值，自动总结按 Codex 默认机制触发。" : "Handled by Codex. Context uses the current model default and compaction follows Codex defaults.")
+                  : contextMode === "one_million"
+                    ? (zh ? "使用 1,000,000 token 上下文，900,000 token 开始自动总结。有效上限由当前模型和通道决定。" : "Uses a 1,000,000-token context window and starts compaction at 900,000 tokens. The active model and route set the effective limit.")
+                    : (zh ? "按下方数值写入 Codex 配置，有效上限由当前模型和通道决定。" : "Writes the values below to Codex configuration. The active model and route set the effective limit.")}
+              </p>
+
+              {#if contextMode === "custom"}
                 <div class="mn-compact-custom-row">
                   <label>
-                    <span>{zh ? "Token 阈值" : "Token threshold"}</span>
-                    <input type="number" min="16384" step="1024" placeholder="256000" bind:value={compactLimitInput} disabled={compactBusy || compactPolicyLoading} />
-                    <small>{zh ? "最小 16,384；达到该阈值后 ChatGPT 会触发自动总结。" : "Minimum 16,384; ChatGPT auto-compacts when the threshold is reached."}</small>
+                    <span>{zh ? "上下文窗口" : "Context window"}</span>
+                    <input type="number" min="16384" step="1024" placeholder="1000000" bind:value={contextWindowInput} disabled={compactBusy || compactPolicyLoading} />
                   </label>
-                  <button type="button" class="tx-btn-primary" disabled={compactBusy || compactPolicyLoading} onclick={() => void saveCustomCompactLimit()}>
-                    <Save size={13} /> {compactBusy ? (zh ? "保存中…" : "Saving…") : (zh ? "保存阈值" : "Save threshold")}
+                  <label>
+                    <span>{zh ? "自动总结阈值" : "Auto-compaction threshold"}</span>
+                    <input type="number" min="16384" step="1024" placeholder="900000" bind:value={compactLimitInput} disabled={compactBusy || compactPolicyLoading} />
+                  </label>
+                  <button type="button" class="tx-btn-primary" disabled={compactBusy || compactPolicyLoading} onclick={() => void saveCustomContextPolicy()}>
+                    <Save size={13} /> {compactBusy ? (zh ? "保存中…" : "Saving…") : (zh ? "保存" : "Save")}
                   </button>
                 </div>
               {/if}

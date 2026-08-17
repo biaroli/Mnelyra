@@ -1,10 +1,9 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
-  import { activateWorkspace } from "$lib/api/activity";
   import { listWorkspaces } from "$lib/api/workspaces";
   import WorkspaceMemoryView from "$lib/components/WorkspaceMemoryView.svelte";
-  import { activeWorkspaceState, workspaces } from "$lib/stores/app";
+  import { workspaces } from "$lib/stores/app";
   import { uiLocale } from "$lib/stores/locale";
   import { showToast } from "$lib/stores/toast";
   import type { WorkspaceProfile } from "$lib/types";
@@ -27,10 +26,6 @@
         return;
       }
 
-      if ($activeWorkspaceState.workspaceId !== id) {
-        activeWorkspaceState.set(await activateWorkspace(id));
-        if (generation !== loadGeneration) return;
-      }
       profile = nextProfile;
     } catch (error) {
       if (generation !== loadGeneration) return;

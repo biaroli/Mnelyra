@@ -232,7 +232,8 @@ impl FrpProfile {
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_mcp_auth_type, FrpProfile};
+    use super::{normalize_mcp_auth_type, AppSettings, FrpProfile};
+    use crate::data::AppData;
 
     #[test]
     fn unsupported_legacy_auth_falls_back_to_oauth() {
@@ -244,6 +245,30 @@ mod tests {
     fn supported_auth_modes_are_preserved() {
         assert_eq!(normalize_mcp_auth_type("oauth"), "oauth");
         assert_eq!(normalize_mcp_auth_type("bearer"), "bearer");
+    }
+
+    #[test]
+    fn openai_connector_settings_update_preserves_runtime_api_key() {
+        let mut data = AppData::default();
+        data.app_secrets
+            .entry("openai_connector".to_string())
+            .or_default()
+            .insert(
+                "runtime_api_key".to_string(),
+                "test-runtime-key".to_string(),
+            );
+
+        let mut settings = AppSettings::from_data(&data);
+        settings.openai_connector.alias = "updated-alias".to_string();
+        settings.apply_to(&mut data);
+
+        assert_eq!(
+            data.app_secrets
+                .get("openai_connector")
+                .and_then(|items| items.get("runtime_api_key"))
+                .map(String::as_str),
+            Some("test-runtime-key")
+        );
     }
 
     #[test]

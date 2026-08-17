@@ -143,8 +143,8 @@
 <section class="mn-console-panel mn-routing-panel">
   <div class="mn-panel-cap">
     <div>
-      <span>{zh ? "公网路由" : "PUBLIC ROUTING"}</span>
-      <strong>{zh ? "长期连接入口" : "Long-lived entry"}</strong>
+      <span>{zh ? "公网接入" : "PUBLIC ACCESS"}</span>
+      <strong>Cloudflare / FRP</strong>
     </div>
     <b>{general?.mcpTunnel.type === "none" ? (zh ? "未配置" : "NOT SET") : general?.mcpTunnel.type?.toUpperCase() ?? "—"}</b>
   </div>
@@ -152,7 +152,7 @@
   {#if loading || !general}
     <div class="mn-routing-loading">{zh ? "读取连接路由…" : "Reading connection routing…"}</div>
   {:else}
-    <div class="mn-route-mode-grid" role="group" aria-label={zh ? "MCP 公网接入方式" : "MCP public routing mode"}>
+    <div class="mn-route-mode-grid" role="group" aria-label={zh ? "通用 MCP 公网接入方式" : "General MCP public routing mode"}>
       <button type="button" class:active={general.mcpTunnel.type === "cloudflare"} onclick={() => updateMcpTunnel("type", "cloudflare")}>
         <Cloud size={15} />
         <span>Cloudflare</span>

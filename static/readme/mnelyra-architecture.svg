@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
   <title id="title">Mnelyra architecture</title>
-  <desc id="desc">ChatGPT, Claude, and other MCP clients connect through Mnelyra to one active local Workspace. Mnelyra exposes relay, shared context, and workspace tools, with an optional ChatGPT Web model path.</desc>
+  <desc id="desc">ChatGPT, Claude, and other MCP clients connect through Mnelyra to one active local Workspace. Native Codex can also use Mnelyra's local Responses path to reach ChatGPT Web models.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#06101a"/>
@@ -141,7 +141,7 @@
     </g>
   </g>
 
-  <!-- Optional ChatGPT Web model path -->
+  <!-- Optional native Codex to ChatGPT Web model path -->
   <g>
     <path d="M1170 390H1204" stroke="#9d82f7" stroke-width="2.8" stroke-dasharray="8 8" marker-end="url(#arrowViolet)"/>
     <g filter="url(#shadow)">
@@ -149,9 +149,9 @@
       <rect x="1234" y="353" width="48" height="48" rx="13" fill="#211a3c" stroke="#6759ac"/>
       <circle cx="1258" cy="377" r="13" fill="none" stroke="#b5a2ff" stroke-width="2.2"/>
       <path d="M1245 377h26M1258 364c5 5 7 9 7 13s-2 8-7 13M1258 364c-5 5-7 9-7 13s2 8 7 13" fill="none" stroke="#b5a2ff" stroke-width="1.8"/>
-      <text x="1302" y="373" class="tiny" fill="#a996f4">OPTIONAL MODEL PATH</text>
-      <text x="1302" y="404" class="label" style="font-size:20px">ChatGPT Web bridge</text>
-      <text x="1234" y="435" class="small" fill="#9e91ca">Use your ChatGPT Web subscription</text>
+      <text x="1302" y="373" class="tiny" fill="#a996f4">CODEX MODEL PATH</text>
+      <text x="1302" y="404" class="label" style="font-size:20px">Native Codex</text>
+      <text x="1234" y="435" class="small" fill="#9e91ca">local Responses bridge</text>
     </g>
 
     <path d="M1375 458V514" stroke="#9d82f7" stroke-width="2.8" stroke-dasharray="8 8" marker-end="url(#arrowViolet)"/>
@@ -159,7 +159,7 @@
       <rect x="1210" y="526" width="330" height="116" rx="20" fill="#151327" stroke="#6759ac" stroke-width="2"/>
       <rect x="1234" y="551" width="48" height="48" rx="13" fill="#211a3c" stroke="#6759ac"/>
       <path d="M1246 584c2-8 7-12 12-12s10 4 12 12M1258 558a7 7 0 1 1 0 14 7 7 0 0 1 0-14z" fill="none" stroke="#b5a2ff" stroke-width="2.2" stroke-linecap="round"/>
-      <text x="1302" y="575" class="label">Your ChatGPT Web</text>
+      <text x="1302" y="575" class="label">ChatGPT Web models</text>
       <text x="1375" y="605" text-anchor="middle" class="small" style="font-size:16px" fill="#9e91ca">your account · your subscription</text>
     </g>
   </g>

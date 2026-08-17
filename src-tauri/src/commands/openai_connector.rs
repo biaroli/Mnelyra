@@ -40,15 +40,15 @@ pub fn save_openai_connector_settings(
     let alias = alias.trim().to_string();
     validate_openai_tunnel_id(&tunnel_id)?;
     validate_openai_tunnel_alias(&alias)?;
-    if let Some(key) = runtime_api_key.as_deref() {
-        let key = key.trim();
-        if !key.is_empty() {
-            if key.len() > 65_536 {
-                return Err(AppError::Message(
-                    "OpenAI Tunnel runtime API key is unexpectedly large".into(),
-                ));
-            }
-            SecretStore::set_app("openai_connector", TUNNEL_RUNTIME_KEY, key)?;
+    let runtime_api_key = runtime_api_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|key| !key.is_empty());
+    if let Some(key) = runtime_api_key {
+        if key.len() > 65_536 {
+            return Err(AppError::Message(
+                "OpenAI Tunnel runtime API key is unexpectedly large".into(),
+            ));
         }
     }
     let config = OpenAiConnectorConfig {
@@ -57,6 +57,13 @@ pub fn save_openai_connector_settings(
         alias,
     };
     state.with_settings(|store| {
+        if let Some(key) = runtime_api_key {
+            // Keep the in-memory DataStore and the on-disk secret payload in sync.
+            // Writing through SecretStore here would update only the file; the next
+            // ordinary settings save could then overwrite that fresh secret with the
+            // stale in-memory snapshot.
+            store.set_app_secret("openai_connector", TUNNEL_RUNTIME_KEY, key)?;
+        }
         let mut settings = store.settings();
         settings.openai_connector = config.clone();
         store.update_settings(settings)
@@ -79,58 +86,6 @@ pub async fn get_openai_connector_status(
 ) -> AppResult<OpenAiConnectorStatus> {
     let config = state.with_settings(|store| Ok(store.settings().openai_connector))?;
     state.openai_tunnel.status(&config).await
-}
-
-pub(crate) async fn auto_start_if_enabled(state: &AppState) {
-    let active = match state.active_workspace_state() {
-        Ok(active) => active,
-        Err(error) => {
-            eprintln!("OpenAI Tunnel auto-start skipped: {error}");
-            return;
-        }
-    };
-    let Some(workspace_id) = active.workspace_id else {
-        return;
-    };
-    let (settings, profile) = match state.with_settings(|store| {
-        let settings = store.settings();
-        if !settings.openai_connector.enabled {
-            return Ok(None);
-        }
-        let mut profile = store
-            .get(&workspace_id)
-            .cloned()
-            .ok_or_else(|| AppError::Message(format!("workspace not found: {workspace_id}")))?;
-        settings.apply_global_config(&mut profile);
-        Ok(Some((settings, profile)))
-    }) {
-        Ok(Some(value)) => value,
-        Ok(None) => return,
-        Err(error) => {
-            eprintln!("OpenAI Tunnel auto-start skipped: {error}");
-            return;
-        }
-    };
-    let mcp_running = state
-        .with_runtime(|runtime| Ok(runtime.is_running(&workspace_id, ServiceKind::Mcp)))
-        .unwrap_or(false);
-    if !mcp_running {
-        eprintln!("OpenAI Tunnel auto-start skipped: authoritative MCP is not running");
-        return;
-    }
-    if let Err(error) = state
-        .openai_tunnel
-        .start(
-            &settings,
-            &settings.openai_connector,
-            profile.runtime.local_port,
-        )
-        .await
-    {
-        // Connector recovery must never take down the already-working MCP path.
-        // Keep enabled=true so the UI can retry after credentials/network recover.
-        eprintln!("OpenAI Tunnel auto-start failed: {error}");
-    }
 }
 
 #[tauri::command]
