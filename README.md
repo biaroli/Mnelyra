@@ -113,13 +113,13 @@ Mnelyra can route native Codex through a local Responses bridge and add the acco
 
 Mnelyra manages the Codex route, embedded browser, and the `127.0.0.1:17841` Responses proxy. **Full** mode also uses OpenAI Tunnel for tool-enabled Codex work. `browser-only` does not start Tunnel.
 
-An existing `codex-chatgpt-web` setup can be recovered or used to reinstall the route. Full setup reuses the Tunnel ID and Runtime Key. The Runtime Key is passed through a temporary file. First use requires ChatGPT browser sign-in.
+Full mode requires an OpenAI Tunnel ID and an OpenAI API Key. The API key is used only to authenticate the OpenAI Tunnel used by the tool return path. Mnelyra does not use this key for model inference or model API requests, so this field does not consume model API tokens or model API credits. First use also requires ChatGPT browser sign-in.
 
 Available models and effective context depend on the signed-in ChatGPT account and route. Mnelyra restores an existing path at startup and also exposes manual recovery from Connections. Readiness comes from the live route/doctor checks rather than the presence of a single process.
 
 ### Codex context and auto-compaction
 
-In **Settings → General → Developer mode**, Mnelyra configures Codex `model_context_window` and `model_auto_compact_token_limit`. **Automatic** is the recommended default: Mnelyra clears both overrides and leaves context sizing and compaction to Codex. Version 0.2.6 also removes the old Web bridge's fixed `140K / 125K` limits for High/Medium. Use **1M** when you want the explicit `1,000,000 / 900,000` profile, or **Custom** when you want to set both values yourself. The active model and route still determine the effective ceiling.
+In **Settings → General → Developer mode**, Mnelyra configures Codex `model_context_window` and `model_auto_compact_token_limit`. **Automatic** is the recommended default: Mnelyra clears both overrides and leaves context sizing and compaction to Codex. Use **1M** when you want the explicit `1,000,000 / 900,000` profile, or **Custom** when you want to set both values yourself. The active model and route still determine the effective ceiling.
 
 ## Workspace memory
 
@@ -202,6 +202,6 @@ Mnelyra is licensed under the [Apache License 2.0](LICENSE).
 
 ## Acknowledgements
 
-Thanks to [miuuyy/codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web), [mybolide/coding-tools-mcp](https://github.com/mybolide/coding-tools-mcp), [xyTom/coding-tools-mcp](https://github.com/xyTom/coding-tools-mcp), [Tauri](https://github.com/tauri-apps/tauri), [Svelte](https://github.com/sveltejs/svelte), and their contributors. Copyright 2026 Coding Tools MCP Contributors.
+Thanks to [mybolide/coding-tools-mcp](https://github.com/mybolide/coding-tools-mcp), [xyTom/coding-tools-mcp](https://github.com/xyTom/coding-tools-mcp), [Tauri](https://github.com/tauri-apps/tauri), [Svelte](https://github.com/sveltejs/svelte), and their contributors. Copyright 2026 Coding Tools MCP Contributors.
 
 Mnelyra is not affiliated with or endorsed by OpenAI, Anthropic, or Cloudflare.

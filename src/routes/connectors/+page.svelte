@@ -81,7 +81,7 @@
     busy = true;
     try {
       await persistTunnelSetup();
-      showToast(zh ? "配置已保存。Runtime Key 不写入命令行。" : "Settings saved. The Runtime Key is not written to the command line.", {
+      showToast(zh ? "配置已保存。OpenAI API Key 不写入命令行。" : "Settings saved. The OpenAI API Key is not written to the command line.", {
         title: zh ? "已保存" : "Saved",
         kind: "success",
       });
@@ -199,15 +199,15 @@
 
         <details class="mn-advanced-connection mn-codex-tunnel-setup">
           <summary>{zh ? "Full 模式 · OpenAI Tunnel 安装参数" : "Full mode · OpenAI Tunnel setup"}</summary>
-          <p>{zh ? "Full 模式使用 OpenAI Tunnel 完成工具回路。已有配置会直接复用。" : "Full mode uses OpenAI Tunnel for the tool return path. Existing setup is reused."}</p>
+          <p>{zh ? "Full 模式使用 OpenAI Tunnel 完成插件工具回路。这里的 API Key 只用于 Tunnel 认证，不用于模型 API 调用，不会产生模型 API token 消耗或模型 API credits 扣费。已有配置会直接复用。" : "Full mode uses OpenAI Tunnel for the plugin tool return path. The API key here is only used for Tunnel authentication, not for model API calls, so it does not consume model API tokens or model API credits. Existing setup is reused."}</p>
           <div class="mn-connector-form">
             <label>
               <span>Tunnel ID</span>
               <input bind:value={tunnelId} placeholder={codexWeb?.tunnelId || "tunnel_…"} disabled={busy} autocomplete="off" />
             </label>
             <label>
-              <span>OpenAI Tunnel Runtime Key</span>
-              <input type="password" bind:value={runtimeApiKey} placeholder={(codexWeb?.tunnelKeyConfigured || settings?.hasRuntimeKey) ? (zh ? "已配置 · 留空保持不变" : "configured · leave blank to keep") : (zh ? "粘贴 Tunnels Read + Use Runtime Key" : "paste a Tunnels Read + Use Runtime Key")} autocomplete="off" disabled={busy} />
+              <span>OpenAI API Key</span>
+              <input type="password" bind:value={runtimeApiKey} placeholder={(codexWeb?.tunnelKeyConfigured || settings?.hasRuntimeKey) ? (zh ? "已配置 · 留空保持不变" : "configured · leave blank to keep") : (zh ? "粘贴 OpenAI API Key" : "paste an OpenAI API Key")} autocomplete="off" disabled={busy} />
             </label>
           </div>
           <div class="mn-connector-actions">
@@ -215,7 +215,7 @@
           </div>
           <div class="mn-connector-links">
             <button type="button" onclick={() => void openUrl("https://platform.openai.com/settings/organization/tunnels")}>OpenAI Tunnels <ExternalLink size={11} /></button>
-            <button type="button" onclick={() => void openUrl("https://platform.openai.com/settings/organization/api-keys")}>Runtime Keys <ExternalLink size={11} /></button>
+            <button type="button" onclick={() => void openUrl("https://platform.openai.com/settings/organization/api-keys")}>OpenAI API Keys <ExternalLink size={11} /></button>
             <button type="button" onclick={() => void openUrl("https://chatgpt.com/#settings/Connectors")}>ChatGPT Connectors <ExternalLink size={11} /></button>
           </div>
         </details>

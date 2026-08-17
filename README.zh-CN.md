@@ -113,13 +113,13 @@ Mnelyra 可以把原生 Codex 接到本机 Responses bridge，并把当前账号
 
 Mnelyra 管理 Codex 路由、内置浏览器和 `127.0.0.1:17841` Responses proxy。**Full** 模式同时使用 OpenAI Tunnel，适合需要完整工具链的 Codex 任务；`browser-only` 不启动 Tunnel。
 
-已有 `codex-chatgpt-web` setup 可以直接恢复或重装路由。Full setup 复用 Tunnel ID 和 Runtime Key，Runtime Key 通过临时文件传递。首次使用需要完成 ChatGPT 浏览器登录。
+Full 模式需要 OpenAI Tunnel ID 和 OpenAI API Key。这把 API Key 只用于插件工具回路的 OpenAI Tunnel 认证；Mnelyra 不会拿它调用模型 API 或做模型推理，因此这里不会产生模型 API token 消耗，也不会扣模型 API credits。首次使用还需要完成 ChatGPT 浏览器登录。
 
 可用模型和有效上下文取决于当前 ChatGPT 账号与通道。Mnelyra 启动时会恢复已有链路，连接页也可以手动恢复；链路状态来自实际 route/doctor 检查，而不是只看某个进程有没有启动。
 
 ### Codex 上下文与自动总结
 
-在 **设置 → 通用 → 开发者模式** 中可以配置 Codex 的 `model_context_window` 与 `model_auto_compact_token_limit`。**自动**是推荐默认值：Mnelyra 清除两个覆盖项，把上下文和压缩交给 Codex。0.2.6 同时移除了旧 Web bridge 对 High/Medium 写死的 `140K / 125K` 限制。需要固定大窗口时可以选择 **1M**，或用 **自定义**明确填写上下文和自动总结阈值。最终有效上限仍由当前模型和通道决定。
+在 **设置 → 通用 → 开发者模式** 中可以配置 Codex 的 `model_context_window` 与 `model_auto_compact_token_limit`。**自动**是推荐默认值：Mnelyra 清除两个覆盖项，把上下文和压缩交给 Codex。需要固定大窗口时可以选择 **1M**，或用 **自定义**明确填写上下文和自动总结阈值。最终有效上限仍由当前模型和通道决定。
 
 ## 工作区记忆
 
@@ -202,6 +202,6 @@ Mnelyra 使用 [Apache License 2.0](LICENSE)。
 
 ## 鸣谢
 
-感谢 [miuuyy/codex-chatgpt-web](https://github.com/miuuyy/codex-chatgpt-web)、[mybolide/coding-tools-mcp](https://github.com/mybolide/coding-tools-mcp)、[xyTom/coding-tools-mcp](https://github.com/xyTom/coding-tools-mcp)、[Tauri](https://github.com/tauri-apps/tauri)、[Svelte](https://github.com/sveltejs/svelte) 及其贡献者。Copyright 2026 Coding Tools MCP Contributors。
+感谢 [mybolide/coding-tools-mcp](https://github.com/mybolide/coding-tools-mcp)、[xyTom/coding-tools-mcp](https://github.com/xyTom/coding-tools-mcp)、[Tauri](https://github.com/tauri-apps/tauri)、[Svelte](https://github.com/sveltejs/svelte) 及其贡献者。Copyright 2026 Coding Tools MCP Contributors。
 
 Mnelyra 与 OpenAI、Anthropic、Cloudflare 没有隶属或官方合作关系。

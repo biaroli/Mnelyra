@@ -524,7 +524,7 @@ impl TemporaryRuntimeKey {
         ));
         std::fs::write(&path, value).map_err(|error| {
             AppError::Message(format!(
-                "failed to prepare Codex Web runtime key file: {error}"
+                "failed to prepare the OpenAI API key file: {error}"
             ))
         })?;
         Ok(Self { path })
@@ -665,7 +665,7 @@ async fn install_route_from_existing_config(
                 .filter(|path| path.is_file())
                 .ok_or_else(|| {
                     AppError::Message(
-                        "Codex Web full mode requires an OpenAI Tunnel Runtime Key. Save it in Mnelyra or complete the upstream setup once."
+                        "Codex Web full mode requires an OpenAI API Key. Save it in Mnelyra or complete the setup once."
                             .into(),
                     )
                 })?
