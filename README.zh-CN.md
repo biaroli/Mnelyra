@@ -125,6 +125,8 @@ OpenAI 的当前说明见 [Developer mode and MCP apps in ChatGPT](https://help.
 
 网页模型能力取决于当前登录的 ChatGPT 账号以及 ChatGPT Web 本身，因此可用性可能随账号能力或网页 UI 更新而变化。
 
+如果还要使用 Mnelyra 的 **OpenAI Tunnel** 作为 Codex/MCP 工具回路，请在 Mnelyra 中配置 Tunnel ID 和 OpenAI API Key。这把 Key 只用于 Tunnel 认证，Mnelyra 不会拿它做模型推理，因此不会消耗模型 API token，也不会扣模型 API credits。
+
 ### Codex 上下文与自动总结
 
 在 **设置 → 通用 → 开发者模式** 中可以配置 Codex 的 `model_context_window` 与 `model_auto_compact_token_limit`。**自动**是推荐默认值：Mnelyra 清除两个覆盖项，把上下文和压缩交给 Codex。需要固定大窗口时可以选择 **1M**，或用 **自定义**明确填写上下文和自动总结阈值。最终有效上限仍由当前模型和通道决定。
@@ -163,7 +165,7 @@ Windows 下的 OpenAI 编码链路保留 workspace sandbox 与 MiKTeX 兼容配�
 
 ### Cloudflare
 
-Named Tunnel 适合长期固定地址；Quick Tunnel 适合临时测试。固定地址示例：
+Named Tunnel 适合长期固定地址；Quick Tunnel 适合临时测试。使用 Named Tunnel 时，先在 Cloudflare 中绑定准备使用的域名或子域名，再把该 hostname 填入 Mnelyra。固定地址示例：
 
 ```text
 https://mcp.example.com/mcp

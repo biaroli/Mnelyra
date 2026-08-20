@@ -125,6 +125,8 @@ Use **Disconnect** in Mnelyra when you want to return new Codex conversations to
 
 The Web bridge uses the capabilities available to the signed-in ChatGPT account, so availability can change with the account or ChatGPT Web UI.
 
+If you also use Mnelyra's **OpenAI Tunnel** for the Codex/MCP tool return path, configure its Tunnel ID and OpenAI API Key in Mnelyra. That key is used only for Tunnel authentication; Mnelyra does not use it for model inference, so this does not consume model API tokens or model API credits.
+
 ### Codex context and auto-compaction
 
 In **Settings → General → Developer mode**, Mnelyra configures Codex `model_context_window` and `model_auto_compact_token_limit`. **Automatic** is the recommended default: Mnelyra clears both overrides and leaves context sizing and compaction to Codex. Use **1M** when you want the explicit `1,000,000 / 900,000` profile, or **Custom** when you want to set both values yourself. The active model and route still determine the effective ceiling.
@@ -163,7 +165,7 @@ On Windows, the OpenAI coding path keeps its workspace sandbox and scoped MiKTeX
 
 ### Cloudflare
 
-Named Tunnel is the long-lived option; Quick Tunnel is for temporary testing. A fixed endpoint can look like:
+Named Tunnel is the long-lived option; Quick Tunnel is for temporary testing. For a Named Tunnel, first bind the domain or subdomain you want to use in Cloudflare, then enter that hostname in Mnelyra. A fixed endpoint can look like:
 
 ```text
 https://mcp.example.com/mcp
