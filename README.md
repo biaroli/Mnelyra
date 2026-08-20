@@ -4,7 +4,7 @@
 
 <h1 align="center">Mnelyra</h1>
 
-<h3 align="center">One local workspace for ChatGPT and Codex, with ChatGPT Web reasoning available in Codex.</h3>
+<h3 align="center">One local workspace for ChatGPT.</h3>
 
 <p align="center">
   <strong>ChatGPT can call local file, shell, Git, and test tools through MCP. Codex can route GPT-5.6 Sol through a signed-in ChatGPT Web session. Mnelyra manages connections, workspace memory, and context settings.</strong>
