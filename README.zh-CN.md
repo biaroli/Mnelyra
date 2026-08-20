@@ -4,7 +4,7 @@
 
 <h1 align="center">Mnelyra</h1>
 
-<h3 align="center">让 ChatGPT、Codex、Claude Code 共用同一个本地工作区，并让 Codex 使用 ChatGPT Web 推理。</h3>
+<h3 align="center">让 ChatGPT 和 Codex 共用同一个本地工作区，并让 Codex 使用 ChatGPT Web 推理。</h3>
 
 <p align="center">
   <strong>网页端可以直接调用本地文件、命令、Git 和测试工具；Codex 可以把 GPT-5.6 Sol 路由到已登录的 ChatGPT Web 会话。Mnelyra 负责连接、工作区记忆和上下文设置。</strong>
@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0">
 </p>
 
-Mnelyra 管两条连接方向。ChatGPT、Claude 和其他 MCP 客户端可以通过远程 MCP 地址进入当前 Workspace，直接读取和修改文件、搜索项目、应用 Patch、执行命令和测试、检查 Git、查看图片。原生 Codex 则可以通过本机 Responses bridge 使用当前 ChatGPT 账号可用的 Web 模型。
+Mnelyra 管两条连接方向。ChatGPT 和其他 MCP 客户端可以通过远程 MCP 地址进入当前 Workspace，直接读取和修改文件、搜索项目、应用 Patch、执行命令和测试、检查 Git、查看图片。原生 Codex 则可以通过本机 Responses bridge 使用当前 ChatGPT 账号可用的 Web 推理档位。
 
 两条链路共用同一个本地项目边界。Workspace 也是记忆边界，切换客户端以后，开发历史、当前焦点、最近变化和未完成事项仍然跟着项目走。
 
@@ -31,7 +31,7 @@ Mnelyra 管两条连接方向。ChatGPT、Claude 和其他 MCP 客户端可以�
 
 ## Mnelyra 实际解决什么
 
-客户端只需要配置一次 Mnelyra。Cloudflare 或 FRP 负责把当前本地 MCP 服务提供给远端客户端；切换 Workspace 只改变项目根目录，不会让 ChatGPT 或 Claude 跟着换地址、重新配一遍连接。
+客户端只需要配置一次 Mnelyra。Cloudflare 或 FRP 负责把当前本地 MCP 服务提供给远端客户端；切换 Workspace 只改变项目根目录，不会让 ChatGPT 跟着换地址、重新配一遍连接。
 
 ChatGPT Web 也可以成为本地项目客户端。连接 Mnelyra 的自定义 MCP app 后，网页里的对话可以调用文件、Patch、命令、测试、Git、图片和 history 工具，操作范围由当前 Workspace 与 Mnelyra 权限设置决定。
 
@@ -131,7 +131,7 @@ OpenAI 的当前说明见 [Developer mode and MCP apps in ChatGPT](https://help.
 
 ## 工作区记忆
 
-Mnelyra 的记忆跟 Workspace 走。不同上游可以围绕同一个项目继续工作，记忆不绑定某一个 ChatGPT 或 Claude 会话。
+Mnelyra 的记忆跟 Workspace 走。不同上游可以围绕同一个项目继续工作，记忆不绑定某一个 ChatGPT 会话。
 
 记忆页面显示当前焦点、最近变化、未完成项和可恢复 checkpoint。跨客户端连续性由持久 history 档案和下面的 history 工具提供。
 

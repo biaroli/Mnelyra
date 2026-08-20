@@ -4,7 +4,7 @@
 
 <h1 align="center">Mnelyra</h1>
 
-<h3 align="center">One local workspace for ChatGPT, Codex, and Claude Code, with ChatGPT Web reasoning available in Codex.</h3>
+<h3 align="center">One local workspace for ChatGPT and Codex, with ChatGPT Web reasoning available in Codex.</h3>
 
 <p align="center">
   <strong>ChatGPT can call local file, shell, Git, and test tools through MCP. Codex can route GPT-5.6 Sol through a signed-in ChatGPT Web session. Mnelyra manages connections, workspace memory, and context settings.</strong>
@@ -21,7 +21,7 @@
   <img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0">
 </p>
 
-Mnelyra manages two connection directions. ChatGPT, Claude, and other MCP clients can enter the active Workspace through a remote MCP endpoint and read or edit files, search the project, apply patches, run commands and tests, inspect Git, and view images. Native Codex can use a local Responses bridge to reach the ChatGPT Web models available to the signed-in account.
+Mnelyra manages two connection directions. ChatGPT and other MCP clients can enter the active Workspace through a remote MCP endpoint and read or edit files, search the project, apply patches, run commands and tests, inspect Git, and view images. Native Codex can use a local Responses bridge to reach the ChatGPT Web reasoning modes available to the signed-in account.
 
 Both paths share the same local project boundary. The Workspace is also the memory boundary, so project history, current focus, recent changes, and open work stay with the project when the client changes.
 
@@ -31,7 +31,7 @@ Both paths share the same local project boundary. The Workspace is also the memo
 
 ## What Mnelyra handles
 
-Clients only need one Mnelyra connection. Cloudflare or FRP can expose the active local MCP service to a remote client. Switching Workspace changes the project root without forcing ChatGPT or Claude onto a new URL or a new client configuration.
+Clients only need one Mnelyra connection. Cloudflare or FRP can expose the active local MCP service to a remote client. Switching Workspace changes the project root without forcing ChatGPT onto a new URL or a new client configuration.
 
 ChatGPT Web can act as a local project client through a custom MCP app. Once connected, a browser conversation can call Mnelyra's file, patch, shell, test, Git, image, and history tools. The active Workspace and Mnelyra permission settings still define the boundary.
 
