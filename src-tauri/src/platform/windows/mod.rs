@@ -43,6 +43,14 @@ impl Platform for WindowsPlatform {
         process::terminate_processes_by_image_path(image_path)
     }
 
+    fn terminate_orphan_processes_by_image_path(
+        &self,
+        image_path: &Path,
+        expected_parent_path: &Path,
+    ) -> AppResult<usize> {
+        process::terminate_orphan_processes_by_image_path(image_path, expected_parent_path)
+    }
+
     fn resolve_executable(&self, name: &str) -> Option<PathBuf> {
         shared_paths::resolve_from_path(name)
     }

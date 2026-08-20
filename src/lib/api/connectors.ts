@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { CodexWebBridgeStatus, OpenAiConnectorSettings } from "$lib/types";
+import type { WebModelBridgeStatus, OpenAiConnectorSettings } from "$lib/types";
 
 export async function getOpenAiConnectorSettings(): Promise<OpenAiConnectorSettings> {
   return invoke<OpenAiConnectorSettings>("get_openai_connector_settings");
@@ -17,10 +17,14 @@ export async function saveOpenAiConnectorSettings(input: {
   });
 }
 
-export async function getCodexWebBridgeStatus(): Promise<CodexWebBridgeStatus> {
-  return invoke<CodexWebBridgeStatus>("get_codex_web_bridge_status");
+export async function getWebModelBridgeStatus(): Promise<WebModelBridgeStatus> {
+  return invoke<WebModelBridgeStatus>("get_web_model_bridge_status");
 }
 
-export async function startCodexWebBridge(): Promise<CodexWebBridgeStatus> {
-  return invoke<CodexWebBridgeStatus>("start_codex_web_bridge");
+export async function startWebModelBridge(): Promise<WebModelBridgeStatus> {
+  return invoke<WebModelBridgeStatus>("start_web_model_bridge");
+}
+
+export async function stopWebModelBridge(): Promise<WebModelBridgeStatus> {
+  return invoke<WebModelBridgeStatus>("stop_web_model_bridge");
 }

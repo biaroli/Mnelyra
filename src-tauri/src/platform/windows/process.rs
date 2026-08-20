@@ -34,6 +34,75 @@ pub fn is_process_alive(pid: u32) -> bool {
     }
 }
 
+/// Find a live child process whose executable path and direct parent's
+/// executable path both match exactly.
+pub fn find_child_process_by_image_paths(
+    child_image_path: &Path,
+    parent_image_path: &Path,
+) -> AppResult<Option<u32>> {
+    let expected_child = normalize_image_path(child_image_path);
+    let expected_parent = normalize_image_path(parent_image_path);
+
+    for (pid, parent_pid) in process_entries()? {
+        if !is_process_alive(pid) || !is_process_alive(parent_pid) {
+            continue;
+        }
+        let child_matches = process_image_path(pid)?
+            .is_some_and(|actual| normalize_image_path(Path::new(&actual)) == expected_child);
+        if !child_matches {
+            continue;
+        }
+        let parent_matches = process_image_path(parent_pid)?
+            .is_some_and(|actual| normalize_image_path(Path::new(&actual)) == expected_parent);
+        if parent_matches {
+            return Ok(Some(pid));
+        }
+    }
+    Ok(None)
+}
+
+/// Terminate only stale instances of an app-managed executable. A process is
+/// kept when its parent is still alive and that parent's image path exactly
+/// matches the expected owner executable. This lets a newly started desktop
+/// process reap cloudflared/frpc instances leaked by an older crashed process
+/// without killing connectors that are still supervised by another live app
+/// instance.
+pub fn terminate_orphan_processes_by_image_path(
+    image_path: &Path,
+    expected_parent_path: &Path,
+) -> AppResult<usize> {
+    let expected_child = normalize_image_path(image_path);
+    let expected_parent = normalize_image_path(expected_parent_path);
+    let mut matched = Vec::new();
+
+    for (pid, parent_pid) in process_entries()? {
+        let child_matches = process_image_path(pid)
+            .ok()
+            .flatten()
+            .is_some_and(|actual| normalize_image_path(Path::new(&actual)) == expected_child);
+        if !child_matches {
+            continue;
+        }
+
+        let parent_matches = is_process_alive(parent_pid)
+            && process_image_path(parent_pid)
+                .ok()
+                .flatten()
+                .is_some_and(|actual| normalize_image_path(Path::new(&actual)) == expected_parent);
+        if !parent_matches {
+            matched.push(pid);
+        }
+    }
+
+    let mut terminated = 0;
+    for pid in matched {
+        if terminate_process_tree(pid).is_ok() {
+            terminated += 1;
+        }
+    }
+    Ok(terminated)
+}
+
 pub fn process_image_path(pid: u32) -> AppResult<Option<String>> {
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
@@ -109,12 +178,16 @@ fn normalize_image_path(path: &Path) -> String {
 }
 
 fn process_ids() -> AppResult<Vec<u32>> {
+    Ok(process_entries()?.into_iter().map(|(pid, _)| pid).collect())
+}
+
+fn process_entries() -> AppResult<Vec<(u32, u32)>> {
     use windows::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
         TH32CS_SNAPPROCESS,
     };
 
-    let mut pids = Vec::new();
+    let mut entries = Vec::new();
     unsafe {
         let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
             .map_err(|err| AppError::Message(format!("CreateToolhelp32Snapshot failed: {err}")))?;
@@ -128,7 +201,7 @@ fn process_ids() -> AppResult<Vec<u32>> {
         };
         if Process32FirstW(snapshot, &mut entry).is_ok() {
             loop {
-                pids.push(entry.th32ProcessID);
+                entries.push((entry.th32ProcessID, entry.th32ParentProcessID));
                 if Process32NextW(snapshot, &mut entry).is_err() {
                     break;
                 }
@@ -136,7 +209,7 @@ fn process_ids() -> AppResult<Vec<u32>> {
         }
         let _ = CloseHandle(snapshot);
     }
-    Ok(pids)
+    Ok(entries)
 }
 
 fn collect_child_pids(root_pid: u32) -> AppResult<Vec<u32>> {

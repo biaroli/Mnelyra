@@ -65,20 +65,16 @@ export interface OpenAiConnectorSettings {
   tunnelClientVersion: string;
 }
 
-export interface CodexWebBridgeStatus {
-  launcherInstalled: boolean;
-  cliInstalled: boolean;
-  version: string;
+export interface WebModelBridgeStatus {
+  codexDetected: boolean;
   mode: string;
-  appName: string | null;
   routeInstalled: boolean;
   routeActive: boolean;
-  routeUrl: string | null;
+  routeUrl: string;
+  browserRunning: boolean;
   browserReady: boolean;
   browserBusy: boolean;
   proxyReady: boolean;
-  tunnelId: string | null;
-  tunnelKeyConfigured: boolean;
   tunnelReady: boolean;
   ready: boolean;
   detail: string;

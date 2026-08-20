@@ -35,7 +35,7 @@ Mnelyra 管两条连接方向。ChatGPT、Claude 和其他 MCP 客户端可以�
 
 ChatGPT Web 也可以成为本地项目客户端。连接 Mnelyra 的自定义 MCP app 后，网页里的对话可以调用文件、Patch、命令、测试、Git、图片和 history 工具，操作范围由当前 Workspace 与 Mnelyra 权限设置决定。
 
-另一边，Mnelyra 可以把 ChatGPT Web 模型装进原生 Codex 的模型列表。网页模型链路包含内置浏览器、Responses proxy、Codex route；Full 模式还包含 OpenAI Tunnel。Mnelyra 检查这些环节的真实状态，在启动和断线后恢复需要的进程。Codex 正在占用浏览器执行任务时会显示“正在运行 Codex 任务”，不会把正常忙碌误报成掉线。
+另一边，Mnelyra 可以把原生 Codex 接到当前登录的 ChatGPT Web 会话。Codex 仍然使用原生的 `gpt-5.6-sol` 模型入口；桥接开启后，在 Codex 中选择 Low、Medium、High，会分别映射到 ChatGPT Web 对应的推理档位。Mnelyra 负责浏览器会话、本机 Responses bridge、可逆 Codex 路由以及断开时的平滑恢复。
 
 上下文设置也放在 Mnelyra 里。**自动**模式清除旧 bridge 写入的固定上下文与总结阈值，由 Codex 使用当前模型默认值和自己的压缩机制；**1M** 会写入 `1,000,000` 上下文和 `900,000` 自动总结阈值；**自定义**可以直接填写两个值。这样不需要再手改 Codex 配置文件。
 
@@ -71,7 +71,7 @@ macOS 当前没有 Apple Developer notarization，首次打开时可能需要在
 | 固定公网域名 | Cloudflare Named Tunnel |
 | 临时测试地址 | Cloudflare Quick Tunnel |
 | 自托管反向代理 | FRP |
-| 在原生 Codex 中使用 ChatGPT Web 模型 | 网页模型接入；Full 模式需要 OpenAI Tunnel |
+| 在原生 Codex 中使用 ChatGPT Web 推理 | 网页模型接入 |
 
 本机 MCP 默认地址类似：
 
@@ -107,15 +107,23 @@ ChatGPT 不能直接连接 `127.0.0.1` 上的 MCP。先在 Mnelyra 的 **连接*
 
 OpenAI 的当前说明见 [Developer mode and MCP apps in ChatGPT](https://help.openai.com/en/articles/12584461-developer-mode-and-mcp-apps-in-chatgpt) 和 [Apps in ChatGPT](https://help.openai.com/en/articles/11487775-apps-in-chatgpt)。
 
-## 把 ChatGPT Web 模型接进 Codex
+## 在 Codex 中使用 ChatGPT Web 推理
 
-Mnelyra 可以把原生 Codex 接到本机 Responses bridge，并把当前账号可用的 `ChatGPT Web — …` 模型加入 Codex 模型列表。安装完成后，这些模型和 Codex 原生模型一起出现在模型选择器里，不需要另开一套工作界面。
+打开 **连接 → 网页模型接入**，点击 **安装到 Codex**。第一次使用时，Mnelyra 会打开自己管理的 ChatGPT 窗口让你完成登录；登录完成后，这个会话由 Mnelyra 单独维护，不会占用你平常使用的浏览器窗口。
 
-Mnelyra 管理 Codex 路由、内置浏览器和 `127.0.0.1:17841` Responses proxy。**Full** 模式同时使用 OpenAI Tunnel，适合需要完整工具链的 Codex 任务；`browser-only` 不启动 Tunnel。
+桥接不会额外制造一组假模型。Codex 仍然选择原生的 `GPT-5.6 Sol`，只需要照常切换推理档位：
 
-Full 模式需要 OpenAI Tunnel ID 和 OpenAI API Key。这把 API Key 只用于插件工具回路的 OpenAI Tunnel 认证；Mnelyra 不会拿它调用模型 API 或做模型推理，因此这里不会产生模型 API token 消耗，也不会扣模型 API credits。首次使用还需要完成 ChatGPT 浏览器登录。
+| Codex 推理档位 | ChatGPT Web 档位 |
+| --- | --- |
+| Low | Low / Instant |
+| Medium | Medium |
+| High | High |
 
-可用模型和有效上下文取决于当前 ChatGPT 账号与通道。Mnelyra 启动时会恢复已有链路，连接页也可以手动恢复；链路状态来自实际 route/doctor 检查，而不是只看某个进程有没有启动。
+安装完成后，**新建一个 Codex 对话**，选择 `GPT-5.6 Sol` 和需要的推理档位即可。已经加载的旧对话会继续沿用创建时的通道，所以切换原生/Web 路由时，新建对话最干净。
+
+需要恢复原生 Codex 时，在 Mnelyra 中点击 **断开**。Mnelyra 会还原之前的 Codex 配置，并在切换过程中避免已经加载的旧对话直接失去连接。这条网页模型路径不需要 OpenAI Tunnel ID，也不需要模型 API Key。
+
+网页模型能力取决于当前登录的 ChatGPT 账号以及 ChatGPT Web 本身，因此可用性可能随账号能力或网页 UI 更新而变化。
 
 ### Codex 上下文与自动总结
 

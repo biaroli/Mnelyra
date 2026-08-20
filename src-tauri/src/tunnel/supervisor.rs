@@ -5,7 +5,7 @@ use tokio::process::Child;
 use tokio::time::{sleep, Duration, Instant};
 
 use crate::error::{AppError, AppResult};
-use crate::platform::platform;
+use crate::platform::{platform, ProcessTreeGuard};
 use crate::secret::SecretStore;
 use crate::settings::AppSettings;
 use crate::workspace::WorkspaceProfile;
@@ -41,6 +41,7 @@ struct TunnelSession {
     public_url: String,
     pid: Option<u32>,
     child: Option<Child>,
+    _process_tree: Option<ProcessTreeGuard>,
 }
 
 struct FrpRoute {
@@ -307,6 +308,7 @@ impl TunnelSupervisor {
                     public_url: public_url.clone(),
                     pid,
                     child: None,
+                    _process_tree: None,
                 },
             );
             return Ok(TunnelStatus {
@@ -346,6 +348,7 @@ impl TunnelSupervisor {
             child,
             public_url,
             pid,
+            process_tree,
         } = handle;
 
         self.sessions.insert(
@@ -354,6 +357,7 @@ impl TunnelSupervisor {
                 public_url: public_url.clone(),
                 pid,
                 child: Some(child),
+                _process_tree: Some(process_tree),
             },
         );
 
@@ -411,6 +415,7 @@ impl TunnelSupervisor {
             child,
             public_url,
             pid,
+            process_tree,
         } = handle;
 
         // Candidate is genuinely ready. Publish it before terminating the old
@@ -421,6 +426,7 @@ impl TunnelSupervisor {
                 public_url: public_url.clone(),
                 pid,
                 child: Some(child),
+                _process_tree: Some(process_tree),
             },
         );
 
@@ -787,6 +793,7 @@ impl TunnelSupervisor {
                             public_url,
                             pid,
                             child: None,
+                            _process_tree: None,
                         },
                     );
                 }

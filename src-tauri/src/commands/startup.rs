@@ -4,7 +4,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Manager};
 
 use crate::app_state::AppState;
-use crate::{codex_web, tunnel};
+use crate::tunnel;
 
 static BACKGROUND_START_STARTED: AtomicBool = AtomicBool::new(false);
 
@@ -34,16 +34,16 @@ fn start_background_once(app: AppHandle) -> bool {
                 .into_iter()
                 .find(|status| status.kind == required_kind)
                 .is_some_and(|status| !status.installed);
-            if missing {
+            let stale_managed_cloudflared = required_kind == "cloudflared"
+                && crate::tunnel::managed_cloudflared_update_needed();
+            if missing || stale_managed_cloudflared {
                 if let Err(error) = tunnel::install_software(required_kind).await {
                     eprintln!("automatic {required_kind} install failed: {error}");
                 }
             }
         }
 
-        let mcp_start = super::runtime::auto_start_configured_mcp(state.inner());
-        let web_models_start = codex_web::auto_start_if_installed();
-        tokio::join!(mcp_start, web_models_start);
+        super::runtime::auto_start_configured_mcp(state.inner()).await;
 
         for status in tunnel::list_software() {
             if !status.installed && Some(status.kind.as_str()) != required_kind.as_deref() {

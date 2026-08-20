@@ -792,68 +792,7 @@ fn app_server_runtime_dir() -> Result<PathBuf, String> {
 }
 
 fn discover_codex_executable() -> Result<PathBuf, String> {
-    if let Some(value) = std::env::var_os("MNELYRA_CODEX_BIN") {
-        let path = PathBuf::from(value);
-        if path.is_file() {
-            return Ok(path);
-        }
-        return Err(format!(
-            "MNELYRA_CODEX_BIN does not point to a file: {}",
-            path.display()
-        ));
-    }
-    if let Ok(path) = which::which("codex") {
-        return Ok(path);
-    }
-
-    for candidate in codex_executable_candidates() {
-        if candidate.is_file() {
-            return Ok(candidate);
-        }
-    }
-
-    Err(
-        "Codex executable was not found. Install Codex CLI or set MNELYRA_CODEX_BIN to the exact codex executable/script path."
-            .into(),
-    )
-}
-
-fn codex_executable_candidates() -> Vec<PathBuf> {
-    let mut candidates = Vec::new();
-    #[cfg(target_os = "windows")]
-    {
-        if let Some(appdata) = std::env::var_os("APPDATA") {
-            candidates.push(PathBuf::from(appdata).join("npm").join("codex.cmd"));
-        }
-        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-            let local = PathBuf::from(local);
-            candidates.push(
-                local
-                    .join("Microsoft")
-                    .join("WinGet")
-                    .join("Links")
-                    .join("codex.exe"),
-            );
-            candidates.push(local.join("Programs").join("Codex").join("codex.exe"));
-        }
-        if let Some(home) = dirs::home_dir() {
-            candidates.push(home.join("scoop").join("shims").join("codex.exe"));
-            candidates.push(home.join(".local").join("bin").join("codex.exe"));
-        }
-        if let Some(prefix) = std::env::var_os("NPM_CONFIG_PREFIX") {
-            candidates.push(PathBuf::from(prefix).join("codex.cmd"));
-        }
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        if let Some(home) = dirs::home_dir() {
-            candidates.push(home.join(".local").join("bin").join("codex"));
-        }
-        if let Some(prefix) = std::env::var_os("NPM_CONFIG_PREFIX") {
-            candidates.push(PathBuf::from(prefix).join("bin").join("codex"));
-        }
-    }
-    candidates
+    crate::codex::discover_executable()
 }
 
 fn codex_command(executable: &Path) -> Command {

@@ -31,6 +31,17 @@ pub trait Platform: Send + Sync {
         Ok(0)
     }
 
+    /// Remove stale managed children whose executable path matches exactly but
+    /// whose parent process is gone or no longer matches the expected owner.
+    /// Non-Windows platforms leave this as a no-op.
+    fn terminate_orphan_processes_by_image_path(
+        &self,
+        _image_path: &Path,
+        _expected_parent_path: &Path,
+    ) -> AppResult<usize> {
+        Ok(0)
+    }
+
     fn resolve_executable(&self, name: &str) -> Option<PathBuf>;
 
     fn cloudflared_candidates(&self) -> Vec<PathBuf>;

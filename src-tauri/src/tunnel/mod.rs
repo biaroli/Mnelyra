@@ -14,6 +14,7 @@ pub use access::{
     stop_for_runtime, supervisor, sync_managed_runtime_routes,
 };
 
+pub(crate) use cloudflare::managed_cloudflared_update_needed;
 #[allow(unused_imports)]
 pub use cloudflare::{
     extract_trycloudflare_url, resolve_cloudflared, spawn_cloudflare_tunnel, stop_child,

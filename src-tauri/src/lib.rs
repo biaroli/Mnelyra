@@ -3,7 +3,7 @@
 mod activity;
 mod app_state;
 mod auth;
-mod codex_web;
+mod codex;
 mod commands;
 mod data;
 mod error;
@@ -19,27 +19,29 @@ mod settings;
 pub mod tools;
 mod tunnel;
 mod update;
+mod web_models;
 mod workspace;
 
 use app_state::AppState;
 use commands::{
     activate_workspace, can_switch_workspace, cancel_session, check_app_update, compact_session,
     create_workspace, delete_frp_profile, delete_workspace, get_active_workspace_state,
-    get_app_settings, get_codex_context_policy, get_codex_web_bridge_status, get_download_config,
-    get_frp_snippet, get_global_auth, get_global_general, get_last_workspace_id,
-    get_openai_connector_settings, get_openai_connector_status, get_pending_session_requests,
-    get_provider_checkpoint, get_provider_status, get_runtime_status, get_session_event_page,
-    get_session_events, get_shared_secret, get_webview_memory_sample, get_workspace_activity,
-    get_workspace_memory_overview, hide_to_tray, install_openai_tunnel_client, install_software,
-    list_frp_profiles, list_providers, list_sessions, list_software, list_workspaces, open_url,
-    open_workspace_directory, quit_app, read_workspace_logs, recreate_ui_webview,
-    regenerate_shared_secret, respond_session_request, restart_runtime, restart_tunnel,
-    run_health_checks, save_frp_profile, save_openai_connector_settings, send_session_input,
-    set_codex_auto_compact_limit, set_codex_context_policy, set_download_config, set_global_auth,
-    set_global_general, set_last_workspace, set_permission_ceiling, set_shared_secret,
-    show_main_window, start_background_services, start_codex_web_bridge, start_openai_connector,
-    start_provider_task, start_runtime, start_tunnel, stop_openai_connector, stop_runtime,
-    stop_tunnel, test_tunnel, uninstall_software, update_workspace,
+    get_app_settings, get_codex_context_policy, get_download_config, get_frp_snippet,
+    get_global_auth, get_global_general, get_last_workspace_id, get_openai_connector_settings,
+    get_openai_connector_status, get_pending_session_requests, get_provider_checkpoint,
+    get_provider_status, get_runtime_status, get_session_event_page, get_session_events,
+    get_shared_secret, get_web_model_bridge_status, get_webview_memory_sample,
+    get_workspace_activity, get_workspace_memory_overview, hide_to_tray,
+    install_openai_tunnel_client, install_software, list_frp_profiles, list_providers,
+    list_sessions, list_software, list_workspaces, open_url, open_workspace_directory, quit_app,
+    read_workspace_logs, recreate_ui_webview, regenerate_shared_secret, respond_session_request,
+    restart_runtime, restart_tunnel, run_health_checks, save_frp_profile,
+    save_openai_connector_settings, send_session_input, set_codex_auto_compact_limit,
+    set_codex_context_policy, set_download_config, set_global_auth, set_global_general,
+    set_last_workspace, set_permission_ceiling, set_shared_secret, show_main_window,
+    start_background_services, start_openai_connector, start_provider_task, start_runtime,
+    start_tunnel, start_web_model_bridge, stop_openai_connector, stop_runtime, stop_tunnel,
+    stop_web_model_bridge, test_tunnel, uninstall_software, update_workspace,
 };
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -166,6 +168,9 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    if web_models::run_native_drain_helper_if_requested() {
+        return;
+    }
     if !acquire_single_instance() {
         return;
     }
@@ -180,6 +185,20 @@ pub fn run() {
         })
         .setup(|app| {
             app.manage(AppState::new().expect("failed to load app state"));
+            #[cfg(debug_assertions)]
+            if web_models::debug_self_test_enabled() {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
+            // Web Models are explicit opt-in. If a previous process died while
+            // its reversible Codex route was active, restore Codex now without
+            // creating the browser or starting the local Responses proxy.
+            if let Err(error) = web_models::restore_native_route_only(app.handle()) {
+                eprintln!("stale Web Models route recovery failed: {error}");
+            }
+            #[cfg(debug_assertions)]
+            web_models::schedule_debug_self_test(app.handle().clone());
             commands::schedule_fallback(app.handle().clone());
             // Recover FRP clients that stay alive while the public proxy dies
             // (common after install/restart network blips).
@@ -209,8 +228,9 @@ pub fn run() {
             install_openai_tunnel_client,
             start_openai_connector,
             stop_openai_connector,
-            get_codex_web_bridge_status,
-            start_codex_web_bridge,
+            get_web_model_bridge_status,
+            start_web_model_bridge,
+            stop_web_model_bridge,
             list_sessions,
             get_workspace_memory_overview,
             get_provider_checkpoint,
@@ -273,6 +293,8 @@ pub fn run() {
                 // and take MCP/FRP down with it (0.1.30 regression).
                 if commands::ui_memory::should_prevent_exit() {
                     api.prevent_exit();
+                } else if let Err(error) = web_models::prepare_native_route_for_exit(app_handle) {
+                    eprintln!("Web Models route restore on exit failed: {error}");
                 }
             }
             tauri::RunEvent::WindowEvent { label, event, .. } => {

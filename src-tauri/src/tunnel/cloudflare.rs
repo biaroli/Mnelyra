@@ -7,7 +7,7 @@ use tokio::sync::oneshot;
 use tokio::time;
 
 use crate::error::{AppError, AppResult};
-use crate::platform::{legacy_app_config_dir, platform};
+use crate::platform::{legacy_app_config_dir, platform, ProcessTreeGuard};
 
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -16,6 +16,7 @@ pub struct CloudflareTunnelHandle {
     pub child: Child,
     pub public_url: String,
     pub pid: Option<u32>,
+    pub(crate) process_tree: ProcessTreeGuard,
 }
 
 fn migrate_legacy_cached_cloudflared() -> Option<PathBuf> {
@@ -112,8 +113,52 @@ fn cloudflared_release_asset() -> AppResult<&'static str> {
     }
 }
 
-/// Latest cloudflared release. Pinned for reproducibility; bump as needed.
-const CLOUDFLARED_VERSION: &str = "2025.6.1";
+/// Latest cloudflared release validated by Mnelyra. Pinned for reproducibility.
+pub(crate) const CLOUDFLARED_VERSION: &str = "2026.7.3";
+
+fn cloudflared_version_marker_path() -> Option<PathBuf> {
+    cached_cloudflared_path().map(|path| path.with_extension("version"))
+}
+
+/// Existing managed installs created before version tracking are considered
+/// stale once. System-installed cloudflared binaries are left alone.
+pub(crate) fn managed_cloudflared_update_needed() -> bool {
+    let Some(binary) = cached_cloudflared_path() else {
+        return false;
+    };
+    if !binary.is_file() {
+        return false;
+    }
+    let Some(marker) = cloudflared_version_marker_path() else {
+        return true;
+    };
+    std::fs::read_to_string(marker)
+        .ok()
+        .is_none_or(|version| version.trim() != CLOUDFLARED_VERSION)
+}
+
+fn verify_downloaded_cloudflared(path: &Path) -> AppResult<()> {
+    let output = std::process::Command::new(path)
+        .arg("--version")
+        .output()
+        .map_err(|error| {
+            AppError::Message(format!(
+                "验证 cloudflared {CLOUDFLARED_VERSION} 失败: {error}"
+            ))
+        })?;
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    if !output.status.success() || !text.contains(CLOUDFLARED_VERSION) {
+        return Err(AppError::Message(format!(
+            "下载的 cloudflared 版本校验失败，期望 {CLOUDFLARED_VERSION}，实际输出: {}",
+            text.trim()
+        )));
+    }
+    Ok(())
+}
 
 /// Download cloudflared into the app cache `bin/` directory, honoring the
 /// configured mirror + proxy. Windows/Linux assets are raw binaries; macOS
@@ -150,6 +195,10 @@ pub(crate) async fn download_cloudflared_to_cache() -> AppResult<PathBuf> {
     }
 
     if dest.is_file() {
+        verify_downloaded_cloudflared(&dest)?;
+        if let Some(marker) = cloudflared_version_marker_path() {
+            std::fs::write(marker, format!("{CLOUDFLARED_VERSION}\n"))?;
+        }
         Ok(dest)
     } else {
         Err(AppError::Message("cloudflared 自动安装失败。".into()))
@@ -228,6 +277,20 @@ pub async fn spawn_cloudflare_tunnel(
     let cloudflared = resolve_cloudflared()?;
     let quick = cloudflare_mode != "named";
 
+    // Recover from older/crashed desktop instances that leaked cloudflared.
+    // Only stale children owned by this app's exact cached/system binary path
+    // are reaped; live connectors parented by another active Mnelyra instance
+    // are preserved.
+    if let Ok(parent_path) = std::env::current_exe() {
+        if let Ok(cleaned) =
+            platform().terminate_orphan_processes_by_image_path(&cloudflared, &parent_path)
+        {
+            if cleaned > 0 {
+                eprintln!("cleaned {cleaned} orphaned cloudflared process(es) before tunnel start");
+            }
+        }
+    }
+
     if !quick {
         if cloudflare_token.trim().is_empty() {
             return Err(AppError::Message(
@@ -273,6 +336,15 @@ pub async fn spawn_cloudflare_tunnel(
         .spawn()
         .map_err(|err| AppError::Message(format!("启动 cloudflared 失败: {err}")))?;
     let pid = child.id();
+    let process_tree = match ProcessTreeGuard::attach(&child) {
+        Ok(guard) => guard,
+        Err(error) => {
+            let _ = stop_child(child, pid).await;
+            return Err(AppError::Message(format!(
+                "无法把 cloudflared 纳入受管进程树: {error}"
+            )));
+        }
+    };
 
     if let Some(parent) = log_path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -351,6 +423,7 @@ pub async fn spawn_cloudflare_tunnel(
         child,
         public_url,
         pid,
+        process_tree,
     })
 }
 
