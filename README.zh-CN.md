@@ -4,10 +4,10 @@
 
 <h1 align="center">Mnelyra</h1>
 
-<h3 align="center">让 ChatGPT、Codex、Claude Code 共用同一个本地工作区，并把 ChatGPT Web 模型接进 Codex。</h3>
+<h3 align="center">让 ChatGPT、Codex、Claude Code 共用同一个本地工作区，并让 Codex 使用 ChatGPT Web 推理。</h3>
 
 <p align="center">
-  <strong>网页端可以直接调用本地文件、命令、Git 和测试工具；Codex 也可以选择 ChatGPT Web 模型。Mnelyra 负责连接、恢复、工作区记忆和上下文设置。</strong>
+  <strong>网页端可以直接调用本地文件、命令、Git 和测试工具；Codex 可以把 GPT-5.6 Sol 路由到已登录的 ChatGPT Web 会话。Mnelyra 负责连接、工作区记忆和上下文设置。</strong>
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@ Mnelyra 管两条连接方向。ChatGPT、Claude 和其他 MCP 客户端可以�
 
 ![Mnelyra 通用设置](static/readme/mnelyra-general.png)
 
-> 所有 README 截图都由当前 Mnelyra production UI 在隔离演示环境中生成。项目名、路径、域名、Client ID、Token 和密钥均为虚构数据，不包含开发者本机内容。
+> README 截图仅使用演示数据。
 
 ## Mnelyra 实际解决什么
 
@@ -35,7 +35,7 @@ Mnelyra 管两条连接方向。ChatGPT、Claude 和其他 MCP 客户端可以�
 
 ChatGPT Web 也可以成为本地项目客户端。连接 Mnelyra 的自定义 MCP app 后，网页里的对话可以调用文件、Patch、命令、测试、Git、图片和 history 工具，操作范围由当前 Workspace 与 Mnelyra 权限设置决定。
 
-另一边，Mnelyra 可以把原生 Codex 接到当前登录的 ChatGPT Web 会话。Codex 仍然使用原生的 `gpt-5.6-sol` 模型入口；桥接开启后，在 Codex 中选择 Low、Medium、High，会分别映射到 ChatGPT Web 对应的推理档位。Mnelyra 负责浏览器会话、本机 Responses bridge、可逆 Codex 路由以及断开时的平滑恢复。
+另一边，Mnelyra 可以把原生 Codex 接到当前登录的 ChatGPT Web 会话。Codex 仍然使用原生的 `gpt-5.6-sol` 模型入口；Low、Medium、High 分别映射到 ChatGPT Web 对应的推理档位。
 
 上下文设置也放在 Mnelyra 里。**自动**模式清除旧 bridge 写入的固定上下文与总结阈值，由 Codex 使用当前模型默认值和自己的压缩机制；**1M** 会写入 `1,000,000` 上下文和 `900,000` 自动总结阈值；**自定义**可以直接填写两个值。这样不需要再手改 Codex 配置文件。
 
@@ -111,7 +111,7 @@ OpenAI 的当前说明见 [Developer mode and MCP apps in ChatGPT](https://help.
 
 打开 **连接 → 网页模型接入**，点击 **安装到 Codex**。第一次使用时，Mnelyra 会打开自己管理的 ChatGPT 窗口让你完成登录；登录完成后，这个会话由 Mnelyra 单独维护，不会占用你平常使用的浏览器窗口。
 
-桥接不会额外制造一组假模型。Codex 仍然选择原生的 `GPT-5.6 Sol`，只需要照常切换推理档位：
+桥接不会新增一组自定义模型。Codex 仍然选择原生的 `GPT-5.6 Sol`，只需要照常切换推理档位：
 
 | Codex 推理档位 | ChatGPT Web 档位 |
 | --- | --- |

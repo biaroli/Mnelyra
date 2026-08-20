@@ -4,10 +4,10 @@
 
 <h1 align="center">Mnelyra</h1>
 
-<h3 align="center">One local workspace for ChatGPT, Codex, and Claude Code, with ChatGPT Web models available inside Codex.</h3>
+<h3 align="center">One local workspace for ChatGPT, Codex, and Claude Code, with ChatGPT Web reasoning available in Codex.</h3>
 
 <p align="center">
-  <strong>ChatGPT can call local file, shell, Git, and test tools through MCP. Codex can also select ChatGPT Web models. Mnelyra manages connections, recovery, workspace memory, and context settings.</strong>
+  <strong>ChatGPT can call local file, shell, Git, and test tools through MCP. Codex can route GPT-5.6 Sol through a signed-in ChatGPT Web session. Mnelyra manages connections, workspace memory, and context settings.</strong>
 </p>
 
 <p align="center">
@@ -27,7 +27,7 @@ Both paths share the same local project boundary. The Workspace is also the memo
 
 ![Mnelyra General settings](static/readme/mnelyra-general.png)
 
-> Every README screenshot is generated from the current Mnelyra production UI in an isolated demo environment. Project names, paths, domains, Client IDs, tokens, and credentials are fictional; no developer machine data is captured.
+> README screenshots use demo data only.
 
 ## What Mnelyra handles
 
@@ -35,7 +35,7 @@ Clients only need one Mnelyra connection. Cloudflare or FRP can expose the activ
 
 ChatGPT Web can act as a local project client through a custom MCP app. Once connected, a browser conversation can call Mnelyra's file, patch, shell, test, Git, image, and history tools. The active Workspace and Mnelyra permission settings still define the boundary.
 
-Mnelyra can also connect native Codex to the signed-in ChatGPT Web session. Codex keeps using its native `gpt-5.6-sol` model entry; selecting Low, Medium, or High maps to the corresponding ChatGPT Web reasoning mode while the bridge is connected. Mnelyra manages the browser session, local Responses bridge, reversible Codex route, and clean recovery when the bridge is disconnected.
+Mnelyra can also connect native Codex to the signed-in ChatGPT Web session. Codex keeps using its native `gpt-5.6-sol` model entry; Low, Medium, and High map to the corresponding ChatGPT Web reasoning modes while the bridge is connected.
 
 Context controls live in Mnelyra as well. **Automatic** removes fixed context and compaction overrides so Codex uses the current model defaults and its own compaction behavior. **1M** writes a `1,000,000`-token context window and a `900,000`-token auto-compaction threshold. **Custom** lets you set both values directly, without hand-editing Codex configuration files.
 
