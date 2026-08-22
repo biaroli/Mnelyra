@@ -215,21 +215,32 @@ Mnelyra tunnel lifecycle hardening in the current worktree includes ownership-aw
 
 RootRelay source remains a separate later task and must not be edited from this Mnelyra workspace.
 
+The 2026-08-23 v0.2.8 release-candidate isolation check verified both statically and at runtime:
+
+- `src-tauri/src/web_models*` has no Cloudflare/FRP/OpenAI-Tunnel lifecycle dependency;
+- `src-tauri/src/tunnel/*` has no `17841`, Codex route, `openai_base_url`, or Web Models dependency;
+- a real Web native-tool E2E left the pre-existing RootRelay `cloudflared` process set and RootRelay MCP listener unchanged;
+- Mnelyra's MCP listener stayed down during that probe while the Web route used only `17841` and then shut it down cleanly;
+- Codex `openai_base_url` was restored after the probe and no random tool-probe file remained.
+
+The ignored legacy `src-tauri/resources/web-model-runtime` tree had zero source references and was removed before a true cold Rust/frontend rebuild. `.web-codex` was also removed as obsolete local history. Neither is part of the current Web Models architecture.
+
 ## 11. Current test baseline
 
-Current verified checks through 2026-08-23:
+Current verified checks through the v0.2.8 release candidate on 2026-08-23:
 
 ```text
 Web Models focused Rust tests: 25 passed, 0 failed
-Full Rust library tests:       161 passed, 0 failed
+Full Rust library tests:       161 passed, 0 failed (including a cold rebuild after cleanup)
 Svelte check:                  0 errors, 0 warnings
-Frontend production build:    PASS
+Frontend production build:    PASS from regenerated build state
 Cargo fmt check:               PASS
 Clippy --all-targets -D warnings: PASS
 Real Web Low E2E:              PASS
 Real Web Medium E2E:           PASS
 Real Web High E2E:             PASS
-Real Web native-tool E2E:      PASS
+Real Web native-tool E2E:      PASS again for the v0.2.8 release candidate
+Cloudflare/Web route isolation: PASS
 Long incremental streaming:    PASS
 Real Desktop High route:       PASS
 ```
@@ -280,4 +291,4 @@ For this Web Models phase, done means:
 15. README/tutorial reflects the single Start/Disconnect native-Sol workflow and does not describe a Tunnel-based Codex tool return path.
 16. Release source contains no local diagnostic/build garbage.
 
-At the 2026-08-23 verification checkpoint, items 1-15 are verified. Item 16 is repository/build-cache cleanup before the next commit/release.
+At the 2026-08-23 v0.2.8 release-candidate checkpoint, items 1-16 are verified. Generated local build caches may be recreated during validation and should be cleaned again after tagging; they are ignored and are not release source.

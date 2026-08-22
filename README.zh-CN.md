@@ -4,7 +4,7 @@
 
 <h1 align="center">Mnelyra</h1>
 
-<h3 align="center">让 ChatGPT 和 Codex 共用同一个本地工作区，并让 Codex 使用 ChatGPT Web 推理。</h3>
+<h3 align="center">让 ChatGPT 连接本地工作区，让 Codex 使用 ChatGPT Web 推理。</h3>
 
 <p align="center">
   <strong>网页端可以直接调用本地文件、命令、Git 和测试工具；Codex 可以把 GPT-5.6 Sol 路由到已登录的 ChatGPT Web 会话。Mnelyra 负责连接、工作区记忆和上下文设置。</strong>
@@ -23,7 +23,7 @@
 
 Mnelyra 管两条连接方向。ChatGPT 和其他 MCP 客户端可以通过远程 MCP 地址进入当前 Workspace，直接读取和修改文件、搜索项目、应用 Patch、执行命令和测试、检查 Git、查看图片。原生 Codex 则可以通过本机 Responses bridge 使用当前 ChatGPT 账号可用的 Web 推理档位。
 
-两条链路共用同一个本地项目边界。Workspace 也是记忆边界，切换客户端以后，开发历史、当前焦点、最近变化和未完成事项仍然跟着项目走。
+两条链路彼此独立。远程 MCP 只服从 Mnelyra 当前 Workspace 和权限设置；Web Models 只改变 Codex 的模型传输，Codex 仍使用自己的当前工作区、工具、审批和 sandbox。Mnelyra 的 Workspace 记忆继续跟 Mnelyra 项目走。
 
 ![Mnelyra 通用设置](static/readme/mnelyra-general.png)
 

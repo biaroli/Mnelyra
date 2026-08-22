@@ -23,7 +23,7 @@
 
 Mnelyra manages two connection directions. ChatGPT and other MCP clients can enter the active Workspace through a remote MCP endpoint and read or edit files, search the project, apply patches, run commands and tests, inspect Git, and view images. Native Codex can use a local Responses bridge to reach the ChatGPT Web reasoning modes available to the signed-in account.
 
-Both paths share the same local project boundary. The Workspace is also the memory boundary, so project history, current focus, recent changes, and open work stay with the project when the client changes.
+The two paths are independent. Remote MCP access follows Mnelyra's active Workspace and permission settings. Web Models only changes Codex model transport; Codex keeps its own current workspace, tools, approvals, and sandbox. Mnelyra Workspace memory remains attached to the Mnelyra project.
 
 ![Mnelyra General settings](static/readme/mnelyra-general.png)
 
