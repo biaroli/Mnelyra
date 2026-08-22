@@ -109,7 +109,7 @@ OpenAI's current setup notes are in [Developer mode and MCP apps in ChatGPT](htt
 
 ## Use ChatGPT Web reasoning in Codex
 
-Open **Connections → Web model bridge** and click **Install in Codex**. On first use, Mnelyra opens its managed ChatGPT window so you can sign in. After sign-in, Mnelyra keeps that browser session separate from your normal browser windows.
+Open **Connections → Web model bridge** and click **Start**. On first use, Mnelyra opens its managed ChatGPT window so you can sign in. After sign-in, Mnelyra keeps that browser session separate from your normal browser windows.
 
 The bridge keeps Codex on its native `gpt-5.6-sol` model entry. In Codex, choose the reasoning level as usual:
 
@@ -119,13 +119,13 @@ The bridge keeps Codex on its native `gpt-5.6-sol` model entry. In Codex, choose
 | Medium | Medium |
 | High | High |
 
-After installation, start a **new Codex conversation** and select `GPT-5.6 Sol` with the reasoning level you want. Existing loaded conversations keep the route they started with, so a new conversation is the clean way to switch between native and Web routing.
+After starting the bridge, open a **new Codex conversation** and select `GPT-5.6 Sol` with the reasoning level you want. Existing loaded conversations keep the route they started with, so a new conversation is the clean way to switch between native and Web routing.
 
-Use **Disconnect** in Mnelyra when you want to return new Codex conversations to the normal native route. Mnelyra restores the previous Codex configuration and keeps already-loaded conversations from being stranded during the handoff. No OpenAI Tunnel ID or model API key is required for this Web Models path.
+Codex keeps ownership of local tool execution, approvals, sandboxing, and MCP tools while the model reasoning runs through ChatGPT Web. Tool results are returned to the Web model for the next turn, so normal Codex tool workflows continue to work.
+
+Use **Disconnect** in Mnelyra when you want to return new Codex conversations to the normal native route. Mnelyra restores the previous Codex configuration and keeps already-loaded conversations from being stranded during the handoff. No OpenAI Tunnel ID or model API key is required for Web Models.
 
 The Web bridge uses the capabilities available to the signed-in ChatGPT account, so availability can change with the account or ChatGPT Web UI.
-
-If you also use Mnelyra's **OpenAI Tunnel** for the Codex/MCP tool return path, configure its Tunnel ID and OpenAI API Key in Mnelyra. That key is used only for Tunnel authentication; Mnelyra does not use it for model inference, so this does not consume model API tokens or model API credits.
 
 ### Codex context and auto-compaction
 

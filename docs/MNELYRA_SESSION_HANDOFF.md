@@ -1,6 +1,6 @@
 # Mnelyra Session Handoff
 
-Last updated: 2026-08-21
+Last updated: 2026-08-23
 
 This is the continuity document for the current Mnelyra state. Read it before changing the Codex Web Models or tunnel lifecycle code.
 
@@ -22,7 +22,8 @@ This route is for remote clients reaching the active local Workspace.
 - Local Responses bridge: `127.0.0.1:17841/v1`.
 - Managed hidden ChatGPT browser session.
 - Native Codex `gpt-5.6-sol` model entry.
-- No Cloudflare dependency, no MCP transport, no OpenAI Tunnel requirement, and no generic Custom-provider setup by the user.
+- No Cloudflare dependency, no OpenAI Tunnel/API-key requirement, and no generic Custom-provider setup by the user.
+- Codex keeps ownership of local tool execution, approvals, sandboxing, and MCP/plugin tools. The Web model receives only the tool surface declared by the active Codex request and returns native Codex tool-call items.
 
 Reasoning mapping:
 
@@ -36,7 +37,7 @@ Normal user flow:
 
 ```text
 Open Mnelyra
--> Connections -> Web model bridge -> Install in Codex
+-> Connections -> Web model bridge -> Start
 -> complete ChatGPT sign-in once if needed
 -> start a NEW Codex conversation
 -> choose GPT-5.6 Sol and Low / Medium / High
@@ -128,6 +129,32 @@ A real Codex Desktop `gpt-5.6-sol` High turn was isolated in `~/.codex/logs_2.sq
 
 This proves the actual Desktop -> Mnelyra -> ChatGPT Web route, not only `codex exec`.
 
+### Native Codex tool loop
+
+On 2026-08-23 a random-file read probe proved the full Web-model tool lifecycle without OpenAI Tunnel or model API inference:
+
+```text
+Codex request
+-> 127.0.0.1:17841 Responses bridge
+-> ChatGPT Web High
+-> native custom_tool_call(functions.exec)
+-> Codex executes the local read under its own sandbox/tool policy
+-> tool output appears in the next Codex Responses input
+-> ChatGPT Web continues reasoning
+-> exact random marker returned
+```
+
+The self-test ended with `codex_pass` and `PASS`. This is the required proof that shell/custom tools can be requested by the Web model and executed by Codex itself. The same declared-tool path covers Codex MCP/plugin tools when Codex advertises them in the request.
+
+Important implementation constraints:
+
+- never execute Codex tools inside Mnelyra; emit native Responses tool-call items and let Codex execute them;
+- validate every requested tool against the exact current Codex tool catalog; fail closed on undeclared tools;
+- tool results already present in the next request are authoritative and are returned to the Web model for continuation;
+- large tool catalogs must be inserted into the ChatGPT composer atomically and verified exactly; repeated 16k editor mutations caused real boundary corruption and must not be restored;
+- custom/freeform tool input may contain raw quotes/newlines; the parser has a narrow recovery path for the observed malformed JSON wrapper, but tool identity still has to match a declared custom tool;
+- if the managed WebView cannot reach ChatGPT directly, Mnelyra may fall back only to an already-configured, live loopback proxy discovered on Windows; it does not change the global system proxy.
+
 ### Streaming
 
 A long structured Markdown direct bridge run emitted 56 deltas before completion. A Codex E2E run emitted 69 deltas before completion. Final Markdown and terminal markers were preserved.
@@ -152,6 +179,7 @@ The Low run exposed a real slider-path JavaScript bug (`options` out of scope in
 --web-models-selftest-high
 --web-models-selftest-stream
 --web-models-selftest-hold
+--web-models-selftest-tool
 ```
 
 Self-tests must remain hidden. If authentication is missing, they fail instead of opening/focusing a window.
@@ -189,22 +217,24 @@ RootRelay source remains a separate later task and must not be edited from this 
 
 ## 11. Current test baseline
 
-Release-candidate checks on 2026-08-21:
+Current verified checks through 2026-08-23:
 
 ```text
-Web Models focused Rust tests: 18 passed, 0 failed
-Full Rust library tests:       154 passed, 0 failed
+Web Models focused Rust tests: 25 passed, 0 failed
+Full Rust library tests:       161 passed, 0 failed
 Svelte check:                  0 errors, 0 warnings
 Frontend production build:    PASS
-Clippy -D warnings:            PASS
+Cargo fmt check:               PASS
+Clippy --all-targets -D warnings: PASS
 Real Web Low E2E:              PASS
 Real Web Medium E2E:           PASS
 Real Web High E2E:             PASS
+Real Web native-tool E2E:      PASS
 Long incremental streaming:    PASS
 Real Desktop High route:       PASS
 ```
 
-The full test count is 154 because an obsolete bundled-catalog parser test was removed together with the now-unused synthetic-catalog code.
+The 2026-08-23 native-tool probe used a random marker file so the model could not guess the answer. The Web model selected a Codex `functions.exec` custom tool, Codex executed it locally, the result returned in the next Web turn, and the exact marker was produced.
 
 ## 12. Clean runtime expectations
 
@@ -238,14 +268,16 @@ For this Web Models phase, done means:
 3. Native `gpt-5.6-sol` maps Low/Medium/High to the corresponding ChatGPT Web modes.
 4. New Desktop threads pick up enable/disable route changes without Desktop restart.
 5. Already-loaded Web threads survive disconnect through native drain instead of breaking or continuing Web inference.
-6. Real Desktop High route is proven.
-7. All three Web reasoning tiers pass E2E.
-8. Long final answers stream incrementally through `17841`/Codex.
-9. Hidden browser does not steal foreground.
-10. Route/config restoration is reversible.
-11. Context policy remains intact.
-12. Focused/full Rust, Svelte, build, and Clippy checks pass.
-13. README/tutorial reflects the native-Sol workflow.
-14. Release source contains no local diagnostic/build garbage.
+6. Web Models can request Codex-native function/custom/MCP tools without OpenAI Tunnel or model API inference, and Codex remains the executor.
+7. Real Desktop High route is proven.
+8. All three Web reasoning tiers pass E2E.
+9. A real random-file native-tool round trip passes end to end.
+10. Long final answers stream incrementally through `17841`/Codex.
+11. Hidden browser does not steal foreground.
+12. Route/config restoration is reversible.
+13. Context policy remains intact.
+14. Focused/full Rust, Svelte, build, fmt, and Clippy checks pass.
+15. README/tutorial reflects the single Start/Disconnect native-Sol workflow and does not describe a Tunnel-based Codex tool return path.
+16. Release source contains no local diagnostic/build garbage.
 
-At the 2026-08-21 release-candidate checkpoint, items 1-13 are verified. Item 14 is the final repository/build-cache cleanup performed after the release artifacts are produced and uploaded.
+At the 2026-08-23 verification checkpoint, items 1-15 are verified. Item 16 is repository/build-cache cleanup before the next commit/release.

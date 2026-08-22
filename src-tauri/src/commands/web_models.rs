@@ -17,7 +17,7 @@ pub async fn start_web_model_bridge(
     app: AppHandle,
     _state: State<'_, AppState>,
 ) -> AppResult<WebModelBridgeStatus> {
-    web_models::start_browser_only(&app).await
+    web_models::start_web_models(&app).await
 }
 
 #[tauri::command]
@@ -25,5 +25,5 @@ pub async fn stop_web_model_bridge(
     app: AppHandle,
     _state: State<'_, AppState>,
 ) -> AppResult<WebModelBridgeStatus> {
-    web_models::stop_browser_only(&app).await
+    web_models::stop_web_models(&app).await
 }

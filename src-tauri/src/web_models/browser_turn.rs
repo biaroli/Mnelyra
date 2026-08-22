@@ -20,13 +20,348 @@ const STREAM_RENDER_INTERVAL: Duration = Duration::from_millis(200);
 const STREAM_TEXT_TAIL_HOLD_CHARS: usize = 48;
 const COMPLETION_STABLE_POLLS: u8 = 3;
 const UI_SETTLE: Duration = Duration::from_millis(250);
-const INSERT_CHUNK_CHARS: usize = 16_000;
 const MAX_PROMPT_CHARS: usize = 480_000;
+const TOOL_CALL_MARKER_PREFIX: &str = "MNELYRA_TOOL_CALLS_";
 
 static TURN_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 fn turn_lock() -> &'static Mutex<()> {
     TURN_LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn repair_invalid_json_strings(input: &str) -> String {
+    let mut repaired = String::with_capacity(input.len());
+    let chars: Vec<char> = input.chars().collect();
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut index = 0usize;
+
+    while index < chars.len() {
+        let ch = chars[index];
+        if !in_string {
+            repaired.push(ch);
+            if ch == '"' {
+                in_string = true;
+                escaped = false;
+            }
+            index += 1;
+            continue;
+        }
+
+        if escaped {
+            repaired.push(ch);
+            escaped = false;
+            index += 1;
+            continue;
+        }
+
+        if ch == '"' {
+            // ChatGPT occasionally emits shell arguments such as
+            // `Get-Content ".rootrelay/file.txt"` with the inner quotes left
+            // unescaped inside the JSON string. A real JSON string can only
+            // terminate before `:`, `,`, `}`, `]`, or EOF (ignoring
+            // whitespace). Treat any other quote as literal content and
+            // escape it. This repair is attempted only after strict JSON
+            // parsing has already failed.
+            let mut lookahead = index + 1;
+            while lookahead < chars.len() && chars[lookahead].is_whitespace() {
+                lookahead += 1;
+            }
+            let terminates =
+                lookahead == chars.len() || matches!(chars[lookahead], ':' | ',' | '}' | ']');
+            if terminates {
+                repaired.push(ch);
+                in_string = false;
+            } else {
+                repaired.push('\\');
+                repaired.push('"');
+            }
+            index += 1;
+            continue;
+        }
+
+        if ch == '\\' {
+            let valid_escape = chars.get(index + 1).is_some_and(|next| {
+                matches!(next, '"' | '\\' | '/' | 'b' | 'f' | 'n' | 'r' | 't' | 'u')
+            });
+            if valid_escape {
+                repaired.push(ch);
+                escaped = true;
+            } else {
+                repaired.push('\\');
+                repaired.push('\\');
+            }
+            index += 1;
+            continue;
+        }
+
+        match ch {
+            '\n' => repaired.push_str("\\n"),
+            '\r' => repaired.push_str("\\r"),
+            '\t' => repaired.push_str("\\t"),
+            ch if ch.is_control() => {
+                use std::fmt::Write as _;
+                let _ = write!(repaired, "\\u{:04x}", ch as u32);
+            }
+            _ => repaired.push(ch),
+        }
+
+        index += 1;
+    }
+
+    repaired
+}
+
+fn extract_simple_tool_field(header: &str, field: &str) -> Option<String> {
+    let marker = format!("\"{field}\":\"");
+    let start = header.find(&marker)? + marker.len();
+    let tail = &header[start..];
+    let end = tail.find('"')?;
+    let value = &tail[..end];
+    if value.is_empty()
+        || !value
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | ':'))
+    {
+        return None;
+    }
+    Some(value.to_string())
+}
+
+fn recover_single_raw_custom_tool_envelope(payload: &str) -> Option<BrowserToolEnvelope> {
+    const INPUT_MARKER: &str = "\"input\":\"";
+    const SUFFIX: &str = "\"}]}";
+
+    let payload = payload.trim();
+    if !payload.starts_with("{\"calls\":[{") || !payload.ends_with(SUFFIX) {
+        return None;
+    }
+    let input_marker_index = payload.find(INPUT_MARKER)?;
+    let header = &payload[..input_marker_index];
+    if !header.contains("\"type\":\"custom_tool_call\"") {
+        return None;
+    }
+
+    let name = extract_simple_tool_field(header, "name")?;
+    let namespace = extract_simple_tool_field(header, "namespace");
+    let input_start = input_marker_index + INPUT_MARKER.len();
+    let input_end = payload.len().checked_sub(SUFFIX.len())?;
+    if input_end < input_start {
+        return None;
+    }
+
+    Some(BrowserToolEnvelope {
+        calls: vec![BrowserToolEnvelopeCall::Custom {
+            namespace,
+            name,
+            input: Value::String(payload[input_start..input_end].to_string()),
+        }],
+    })
+}
+
+fn decode_tool_envelope(payload: &str) -> AppResult<BrowserToolEnvelope> {
+    let payload = payload.trim();
+    let payload = payload
+        .strip_prefix("```json")
+        .or_else(|| payload.strip_prefix("```JSON"))
+        .or_else(|| payload.strip_prefix("```"))
+        .unwrap_or(payload)
+        .trim();
+    let payload = payload.strip_suffix("```").unwrap_or(payload).trim();
+
+    match serde_json::from_str(payload) {
+        Ok(envelope) => Ok(envelope),
+        Err(first_error) => {
+            let repaired = repair_invalid_json_strings(payload);
+            match serde_json::from_str(&repaired) {
+                Ok(envelope) => Ok(envelope),
+                Err(second_error) => {
+                    if let Some(envelope) = recover_single_raw_custom_tool_envelope(payload) {
+                        return Ok(envelope);
+                    }
+                    #[cfg(debug_assertions)]
+                    {
+                        let preview: String = payload.chars().take(600).collect();
+                        eprintln!("[web-models tools] invalid envelope preview={preview:?}");
+                    }
+                    Err(AppError::Message(format!(
+                        "ChatGPT selected Codex tool mode but returned invalid tool JSON: {first_error}; repair also failed: {second_error}"
+                    )))
+                }
+            }
+        }
+    }
+}
+
+fn collect_declared_tools(request: &Value) -> Vec<Value> {
+    let mut tools = request
+        .get("tools")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    if let Some(input) = request.get("input").and_then(Value::as_array) {
+        for item in input {
+            if item.get("type").and_then(Value::as_str) != Some("additional_tools") {
+                continue;
+            }
+            if let Some(additional) = item.get("tools").and_then(Value::as_array) {
+                tools.extend(additional.iter().cloned());
+            }
+        }
+    }
+    tools
+}
+
+fn normalize_tool_namespace(namespace: Option<&str>) -> Option<String> {
+    namespace
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && *value != "functions")
+        .map(str::to_string)
+}
+
+fn declared_tool_kind(
+    request: &Value,
+    namespace: Option<&str>,
+    name: &str,
+) -> Option<DeclaredToolKind> {
+    let requested_namespace = namespace
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("functions");
+
+    for tool in collect_declared_tools(request) {
+        match tool.get("type").and_then(Value::as_str) {
+            Some("function") if requested_namespace == "functions" => {
+                if tool.get("name").and_then(Value::as_str) == Some(name) {
+                    return Some(DeclaredToolKind::Function);
+                }
+            }
+            Some("custom") if requested_namespace == "functions" => {
+                if tool.get("name").and_then(Value::as_str) == Some(name) {
+                    return Some(DeclaredToolKind::Custom);
+                }
+            }
+            Some("namespace") => {
+                let Some(declared_namespace) = tool.get("name").and_then(Value::as_str) else {
+                    continue;
+                };
+                if declared_namespace != requested_namespace {
+                    continue;
+                }
+                let Some(nested) = tool.get("tools").and_then(Value::as_array) else {
+                    continue;
+                };
+                for nested_tool in nested {
+                    if nested_tool.get("name").and_then(Value::as_str) != Some(name) {
+                        continue;
+                    }
+                    match nested_tool.get("type").and_then(Value::as_str) {
+                        Some("function") => return Some(DeclaredToolKind::Function),
+                        Some("custom") => return Some(DeclaredToolKind::Custom),
+                        _ => {}
+                    }
+                }
+            }
+            Some("tool_search") if name == "tool_search" => {
+                return Some(DeclaredToolKind::ToolSearch);
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn value_to_json_string(value: Value) -> AppResult<String> {
+    match value {
+        Value::String(value) => Ok(value),
+        value => serde_json::to_string(&value).map_err(AppError::from),
+    }
+}
+
+fn parse_browser_output(
+    request: &Value,
+    marker: &str,
+    markdown: String,
+) -> AppResult<BrowserTurnOutput> {
+    let Some(payload) = markdown.trim_start().strip_prefix(marker) else {
+        return Ok(BrowserTurnOutput::Message(markdown));
+    };
+    let payload = payload.trim();
+    let envelope = decode_tool_envelope(payload)?;
+    if envelope.calls.is_empty() || envelope.calls.len() > 16 {
+        return Err(AppError::Message(
+            "ChatGPT returned an invalid number of Codex tool calls".into(),
+        ));
+    }
+
+    let mut calls = Vec::with_capacity(envelope.calls.len());
+    for call in envelope.calls {
+        match call {
+            BrowserToolEnvelopeCall::Function {
+                namespace,
+                name,
+                arguments,
+            } => {
+                let kind = declared_tool_kind(request, namespace.as_deref(), &name);
+                if kind != Some(DeclaredToolKind::Function) {
+                    return Err(AppError::Message(format!(
+                        "ChatGPT requested undeclared Codex function tool {}{}",
+                        namespace
+                            .as_deref()
+                            .filter(|value| !value.is_empty())
+                            .map(|value| format!("{value}."))
+                            .unwrap_or_default(),
+                        name
+                    )));
+                }
+                calls.push(BrowserToolCall::Function {
+                    namespace: normalize_tool_namespace(namespace.as_deref()),
+                    name,
+                    arguments: value_to_json_string(arguments)?,
+                });
+            }
+            BrowserToolEnvelopeCall::Custom {
+                namespace,
+                name,
+                input,
+            } => {
+                let kind = declared_tool_kind(request, namespace.as_deref(), &name);
+                if kind != Some(DeclaredToolKind::Custom) {
+                    return Err(AppError::Message(format!(
+                        "ChatGPT requested undeclared Codex custom tool {}{}",
+                        namespace
+                            .as_deref()
+                            .filter(|value| !value.is_empty())
+                            .map(|value| format!("{value}."))
+                            .unwrap_or_default(),
+                        name
+                    )));
+                }
+                calls.push(BrowserToolCall::Custom {
+                    namespace: normalize_tool_namespace(namespace.as_deref()),
+                    name,
+                    input: value_to_json_string(input)?,
+                });
+            }
+            BrowserToolEnvelopeCall::ToolSearch { arguments } => {
+                if declared_tool_kind(request, None, "tool_search")
+                    != Some(DeclaredToolKind::ToolSearch)
+                {
+                    return Err(AppError::Message(
+                        "ChatGPT requested Codex tool_search when it was not declared".into(),
+                    ));
+                }
+                calls.push(BrowserToolCall::ToolSearch { arguments });
+            }
+        }
+    }
+    Ok(BrowserTurnOutput::ToolCalls(calls))
+}
+
+struct PromptContract {
+    text: String,
+    tool_marker: String,
 }
 
 fn common_prefix_byte_len(left: &str, right: &str) -> usize {
@@ -193,6 +528,116 @@ struct TurnProbe {
     assistant_turn_count: u64,
 }
 
+#[derive(Debug)]
+enum BrowserTurnOutput {
+    Message(String),
+    ToolCalls(Vec<BrowserToolCall>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum BrowserToolCall {
+    Function {
+        namespace: Option<String>,
+        name: String,
+        arguments: String,
+    },
+    Custom {
+        namespace: Option<String>,
+        name: String,
+        input: String,
+    },
+    ToolSearch {
+        arguments: Value,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+struct BrowserToolEnvelope {
+    calls: Vec<BrowserToolEnvelopeCall>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum BrowserToolEnvelopeCall {
+    #[serde(rename = "function_call")]
+    Function {
+        #[serde(default)]
+        namespace: Option<String>,
+        name: String,
+        arguments: Value,
+    },
+    #[serde(rename = "custom_tool_call")]
+    Custom {
+        #[serde(default)]
+        namespace: Option<String>,
+        name: String,
+        input: Value,
+    },
+    #[serde(rename = "tool_search_call")]
+    ToolSearch { arguments: Value },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeclaredToolKind {
+    Function,
+    Custom,
+    ToolSearch,
+}
+
+#[derive(Debug, Default)]
+struct ToolStreamGate {
+    marker: String,
+    pending: String,
+    mode: ToolStreamMode,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+enum ToolStreamMode {
+    #[default]
+    Undecided,
+    Message,
+    Tool,
+}
+
+impl ToolStreamGate {
+    fn new(marker: String) -> Self {
+        Self {
+            marker,
+            pending: String::new(),
+            mode: ToolStreamMode::Undecided,
+        }
+    }
+
+    async fn forward(&mut self, delta: &str, delta_tx: &mpsc::Sender<String>) -> AppResult<()> {
+        match self.mode {
+            ToolStreamMode::Message => {
+                delta_tx.send(delta.to_string()).await.map_err(|_| {
+                    AppError::Message("Codex closed the Mnelyra Web Models response stream".into())
+                })?;
+            }
+            ToolStreamMode::Tool => {}
+            ToolStreamMode::Undecided => {
+                self.pending.push_str(delta);
+                let candidate = self.pending.trim_start();
+                if candidate.is_empty() || self.marker.starts_with(candidate) {
+                    return Ok(());
+                }
+                if candidate.starts_with(&self.marker) {
+                    self.mode = ToolStreamMode::Tool;
+                    return Ok(());
+                }
+
+                self.mode = ToolStreamMode::Message;
+                let pending = std::mem::take(&mut self.pending);
+                delta_tx.send(pending).await.map_err(|_| {
+                    AppError::Message("Codex closed the Mnelyra Web Models response stream".into())
+                })?;
+            }
+        }
+        Ok(())
+    }
+}
+
 pub(super) async fn responses(app: &AppHandle, request: Value) -> Response {
     let model = request
         .get("model")
@@ -281,7 +726,7 @@ pub(super) async fn responses(app: &AppHandle, request: Value) -> Response {
         };
 
         match result {
-            Ok(markdown) => {
+            Ok(BrowserTurnOutput::Message(markdown)) => {
                 while let Ok(delta) = delta_rx.try_recv() {
                     if delta.is_empty() {
                         continue;
@@ -404,6 +849,68 @@ pub(super) async fn responses(app: &AppHandle, request: Value) -> Response {
                     delta_count
                 );
             }
+            Ok(BrowserTurnOutput::ToolCalls(calls)) => {
+                while let Ok(delta) = delta_rx.try_recv() {
+                    if !delta.is_empty() {
+                        streamed_markdown.push_str(&delta);
+                    }
+                }
+                if output_started || !streamed_markdown.is_empty() {
+                    let failed = response_snapshot(
+                        &response_id_task,
+                        created_at,
+                        "failed",
+                        &model_task,
+                        Vec::<Value>::new(),
+                        Some("Mnelyra streamed assistant text before a Codex tool call".into()),
+                    );
+                    let _ = send_event(
+                        &tx,
+                        "response.failed",
+                        json!({"response": failed}),
+                        &mut sequence,
+                    )
+                    .await;
+                    let _ = send_raw(&tx, "data: [DONE]\n\n").await;
+                    return;
+                }
+
+                let items: Vec<Value> = calls.into_iter().map(browser_tool_call_item).collect();
+                for (output_index, item) in items.iter().enumerate() {
+                    if !send_event(
+                        &tx,
+                        "response.output_item.done",
+                        json!({"output_index": output_index, "item": item}),
+                        &mut sequence,
+                    )
+                    .await
+                    {
+                        return;
+                    }
+                }
+                let completed = response_snapshot(
+                    &response_id_task,
+                    created_at,
+                    "completed",
+                    &model_task,
+                    items.clone(),
+                    None,
+                );
+                let _ = send_event(
+                    &tx,
+                    "response.completed",
+                    json!({"response": completed}),
+                    &mut sequence,
+                )
+                .await;
+                let _ = send_raw(&tx, "data: [DONE]\n\n").await;
+                eprintln!(
+                    "[web-models tools] model={} completed_ms={} calls={}",
+                    model_task,
+                    stream_started.elapsed().as_millis(),
+                    items.len()
+                );
+            }
             Err(error) => {
                 let failed = response_snapshot(
                     &response_id_task,
@@ -446,7 +953,7 @@ async fn run_browser_turn(
     app: &AppHandle,
     request: &Value,
     delta_tx: mpsc::Sender<String>,
-) -> AppResult<String> {
+) -> AppResult<BrowserTurnOutput> {
     let turn_started = Instant::now();
     let _turn = turn_lock().lock().await;
     let _busy = BusyFlag::set();
@@ -455,7 +962,8 @@ async fn run_browser_turn(
         .and_then(Value::as_str)
         .ok_or_else(|| AppError::Message("Web-model Responses request is missing model".into()))?;
     let effort_index = effort_index(request)?;
-    let prompt = compile_prompt(request)?;
+    let contract = compile_prompt(request)?;
+    let prompt = contract.text;
     let prompt_chars = prompt.chars().count();
     if prompt_chars > MAX_PROMPT_CHARS {
         return Err(AppError::Message(format!(
@@ -509,7 +1017,14 @@ async fn run_browser_turn(
         "[web-models timing] model={model} phase=submit_ack_ms value={}",
         phase_started.elapsed().as_millis()
     );
-    let result = stream_completed_markdown(&window, &delta_tx, turn_started).await;
+    let result = stream_completed_markdown(
+        &window,
+        &delta_tx,
+        turn_started,
+        contract.tool_marker.clone(),
+    )
+    .await
+    .and_then(|markdown| parse_browser_output(request, &contract.tool_marker, markdown));
     eprintln!(
         "[web-models timing] model={model} phase=turn_total_ms value={}",
         turn_started.elapsed().as_millis()
@@ -521,7 +1036,7 @@ async fn navigate_fresh_temporary_chat(
     window: &WebviewWindow,
     allow_empty_page_reuse: bool,
 ) -> AppResult<()> {
-    // start_browser_only already leaves an authenticated Temporary Chat open.
+    // start_web_models already leaves an authenticated Temporary Chat open.
     // Reuse it for the first turn when it is provably empty instead of paying
     // for a second full ChatGPT navigation/hydration. Once a turn exists, or
     // when the effort-picker recovery path explicitly requests a refresh, keep
@@ -1088,10 +1603,11 @@ async fn attach_prompt(window: &WebviewWindow, prompt: &str) -> AppResult<Compos
     let expected = normalize_editor_text(prompt);
     for attempt in 0..2 {
         focus_and_clear_composer(window).await?;
-        for chunk in prompt_chunks(prompt, INSERT_CHUNK_CHARS) {
-            let _ =
-                super::call_devtools(window, "Input.insertText", json!({"text": chunk})).await?;
-        }
+        // Lexical can normalize/merge text differently at the boundary between
+        // consecutive Input.insertText calls. A single DevTools insertion keeps
+        // the Codex transport prompt atomic and lets the exact-content check
+        // below protect us from any browser-side mutation.
+        let _ = super::call_devtools(window, "Input.insertText", json!({"text": prompt})).await?;
         tokio::time::sleep(UI_SETTLE).await;
         let state = composer_state(window).await?;
         let observed = normalize_editor_text(&state.text);
@@ -1247,6 +1763,7 @@ async fn stream_completed_markdown(
     window: &WebviewWindow,
     delta_tx: &mpsc::Sender<String>,
     turn_started: Instant,
+    tool_marker: String,
 ) -> AppResult<String> {
     let deadline = tokio::time::Instant::now() + TURN_TIMEOUT;
     let mut emitted = String::new();
@@ -1260,6 +1777,7 @@ async fn stream_completed_markdown(
     let mut saw_assistant = false;
     let mut first_assistant_logged = false;
     let mut first_delta_logged = false;
+    let mut stream_gate = ToolStreamGate::new(tool_marker);
     while tokio::time::Instant::now() < deadline {
         let probe = read_turn_probe(window).await?;
         if let Some(error) = probe.error.filter(|value| !value.trim().is_empty()) {
@@ -1351,11 +1869,7 @@ async fn stream_completed_markdown(
                     let candidate = normalize_rendered_blocks(&candidate_blocks);
                     if candidate.starts_with(&emitted) && candidate.len() > emitted.len() {
                         let delta = candidate[emitted.len()..].to_string();
-                        delta_tx.send(delta.clone()).await.map_err(|_| {
-                            AppError::Message(
-                                "Codex closed the Mnelyra Web Models response stream".into(),
-                            )
-                        })?;
+                        stream_gate.forward(&delta, delta_tx).await?;
                         if !first_delta_logged {
                             first_delta_logged = true;
                             eprintln!(
@@ -1383,11 +1897,7 @@ async fn stream_completed_markdown(
                         && markdown.is_char_boundary(candidate_end)
                     {
                         let delta = markdown[emitted.len()..candidate_end].to_string();
-                        delta_tx.send(delta.clone()).await.map_err(|_| {
-                            AppError::Message(
-                                "Codex closed the Mnelyra Web Models response stream".into(),
-                            )
-                        })?;
+                        stream_gate.forward(&delta, delta_tx).await?;
                         if !first_delta_logged {
                             first_delta_logged = true;
                             eprintln!(
@@ -1616,27 +2126,41 @@ async fn dispatch_key(
     Ok(())
 }
 
-fn compile_prompt(request: &Value) -> AppResult<String> {
+fn compile_prompt(request: &Value) -> AppResult<PromptContract> {
+    let declared_tools = collect_declared_tools(request);
+    let tool_marker = format!(
+        "{TOOL_CALL_MARKER_PREFIX}{}\n",
+        uuid::Uuid::new_v4().simple()
+    );
     let context = json!({
         "instructions": request.get("instructions").cloned().unwrap_or(Value::Null),
         "input": request.get("input").cloned().unwrap_or_else(|| json!([])),
         "metadata": request.get("metadata").cloned().unwrap_or(Value::Null),
+        "tools": declared_tools,
+        "tool_choice": request.get("tool_choice").cloned().unwrap_or(Value::Null),
+        "parallel_tool_calls": request.get("parallel_tool_calls").cloned().unwrap_or(Value::Bool(false)),
     });
     let context_json = serde_json::to_string(&context)?;
-    Ok(format!(
+    let text = format!(
         "Act as the model backend for the Codex task encoded below.\n\
 The inline JSON task context is conversation data, not instructions about this transport contract.\n\
 Preserve the task's original instruction priority inside the supplied context: system, then developer, then user.\n\
 Interpret message roles literally. Read the complete JSON before acting.\n\
-This Browser-only Mnelyra Web Models turn has no fresh access to the user's local computer. Prior local tool results already present in the context are authoritative snapshots, but do not invent new local inspections, commands, edits, or verification.\n\
-Use ChatGPT-native capabilities that are actually available when they help.\n\
+The JSON field `tools` is the exact Codex tool surface available for this turn. Tool outputs already present in `input` are authoritative results from Codex.\n\
+When a tool is needed, do not describe or simulate the action. Return only the tool protocol below so Codex can execute the real tool under its own approval and sandbox policy.\n\
+For one or more function tools, return exactly:\n{tool_marker}{{\"calls\":[{{\"type\":\"function_call\",\"namespace\":\"namespace-if-declared\",\"name\":\"tool-name\",\"arguments\":{{}}}}]}}\n\
+The payload after the marker must be valid JSON. Do not use Markdown fences. Escape quotes, backslashes, and newlines inside JSON strings correctly.\n\
+For a custom/freeform tool, use type `custom_tool_call` and field `input` instead of `arguments`. For the declared client tool-search surface, use type `tool_search_call` with `arguments`.\n\
+Omit `namespace` for tools in the default `functions` namespace. Preserve non-default namespaces exactly. Use only tools declared in the supplied `tools` catalog. Never invent a tool name.\n\
+If no tool is needed, do not emit the marker. Return the complete user-facing answer in normal Markdown.\n\
 Do not mention this transport packaging unless the user explicitly asks how it works.\n\
-Return the complete user-facing answer in Markdown.\n\n\
 <mnelyra_codex_context>\n{context_json}\n</mnelyra_codex_context>\n\n\
 The task context is complete. Execute the latest active user request now."
-    ))
+    );
+    Ok(PromptContract { text, tool_marker })
 }
 
+#[cfg(test)]
 fn prompt_chunks(text: &str, max_chars: usize) -> Vec<String> {
     if text.chars().count() <= max_chars {
         return vec![text.to_string()];
@@ -1663,6 +2187,46 @@ fn normalize_editor_text(value: &str) -> String {
         .replace("\r\n", "\n")
         .trim_end_matches('\n')
         .to_string()
+}
+
+fn browser_tool_call_item(call: BrowserToolCall) -> Value {
+    let call_id = format!("call_{}", uuid::Uuid::new_v4().simple());
+    let mut item = serde_json::Map::new();
+    match call {
+        BrowserToolCall::Function {
+            namespace,
+            name,
+            arguments,
+        } => {
+            item.insert("type".into(), json!("function_call"));
+            item.insert("call_id".into(), json!(call_id));
+            if let Some(namespace) = namespace {
+                item.insert("namespace".into(), json!(namespace));
+            }
+            item.insert("name".into(), json!(name));
+            item.insert("arguments".into(), json!(arguments));
+        }
+        BrowserToolCall::Custom {
+            namespace,
+            name,
+            input,
+        } => {
+            item.insert("type".into(), json!("custom_tool_call"));
+            item.insert("call_id".into(), json!(call_id));
+            if let Some(namespace) = namespace {
+                item.insert("namespace".into(), json!(namespace));
+            }
+            item.insert("name".into(), json!(name));
+            item.insert("input".into(), json!(input));
+        }
+        BrowserToolCall::ToolSearch { arguments } => {
+            item.insert("type".into(), json!("tool_search_call"));
+            item.insert("call_id".into(), json!(call_id));
+            item.insert("execution".into(), json!("client"));
+            item.insert("arguments".into(), arguments);
+        }
+    }
+    Value::Object(item)
 }
 
 fn response_snapshot(
@@ -1875,16 +2439,142 @@ mod tests {
     }
 
     #[test]
-    fn prompt_contract_contains_context_without_tools_surface() {
+    fn prompt_contract_contains_codex_tool_surface() {
         let request = json!({
             "model": "mnelyra-web/high",
             "instructions": "system",
             "input": [{"role":"user","content":"hello"}],
             "tools": [{"type":"function","name":"danger"}],
         });
-        let prompt = compile_prompt(&request).unwrap();
-        assert!(prompt.contains("<mnelyra_codex_context>"));
-        assert!(prompt.contains("hello"));
-        assert!(!prompt.contains("\"danger\""));
+        let contract = compile_prompt(&request).unwrap();
+        assert!(contract.text.contains("<mnelyra_codex_context>"));
+        assert!(contract.text.contains("hello"));
+        assert!(contract.text.contains("\"danger\""));
+        assert!(contract.text.contains(&contract.tool_marker));
+    }
+
+    #[test]
+    fn responses_lite_additional_tools_are_discovered() {
+        let request = json!({
+            "model": "gpt-5.6-sol",
+            "input": [{
+                "type": "additional_tools",
+                "role": "developer",
+                "tools": [{
+                    "type": "namespace",
+                    "name": "functions",
+                    "description": "",
+                    "tools": [
+                        {"type":"function","name":"shell","description":"run shell","parameters":{"type":"object"}},
+                        {"type":"custom","name":"apply_patch","description":"patch","format":{"type":"text","syntax":"text","definition":""}}
+                    ]
+                }]
+            }]
+        });
+        assert_eq!(
+            declared_tool_kind(&request, None, "shell"),
+            Some(DeclaredToolKind::Function)
+        );
+        assert_eq!(
+            declared_tool_kind(&request, Some("functions"), "apply_patch"),
+            Some(DeclaredToolKind::Custom)
+        );
+    }
+
+    #[test]
+    fn browser_tool_envelope_becomes_codex_function_call() {
+        let request = json!({
+            "model": "gpt-5.6-sol",
+            "tools": [{"type":"namespace","name":"mcp__demo","description":"demo","tools":[
+                {"type":"function","name":"read_file","description":"read","parameters":{"type":"object"}}
+            ]}]
+        });
+        let marker = "MNELYRA_TOOL_CALLS_test\n";
+        let output = parse_browser_output(
+            &request,
+            marker,
+            format!(
+                "{marker}{{\"calls\":[{{\"type\":\"function_call\",\"namespace\":\"mcp__demo\",\"name\":\"read_file\",\"arguments\":{{\"path\":\"README.md\"}}}}]}}"
+            ),
+        )
+        .unwrap();
+        match output {
+            BrowserTurnOutput::ToolCalls(calls) => {
+                assert_eq!(calls.len(), 1);
+                assert_eq!(
+                    calls[0],
+                    BrowserToolCall::Function {
+                        namespace: Some("mcp__demo".into()),
+                        name: "read_file".into(),
+                        arguments: "{\"path\":\"README.md\"}".into(),
+                    }
+                );
+            }
+            BrowserTurnOutput::Message(_) => panic!("expected tool call"),
+        }
+    }
+
+    #[test]
+    fn undeclared_browser_tool_call_is_rejected() {
+        let request = json!({
+            "model": "gpt-5.6-sol",
+            "tools": [{"type":"function","name":"allowed","parameters":{"type":"object"}}]
+        });
+        let marker = "MNELYRA_TOOL_CALLS_test\n";
+        let result = parse_browser_output(
+            &request,
+            marker,
+            format!(
+                "{marker}{{\"calls\":[{{\"type\":\"function_call\",\"name\":\"other\",\"arguments\":{{}}}}]}}"
+            ),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn tool_envelope_repairs_unescaped_windows_path_backslashes() {
+        let payload = r#"{"calls":[{"type":"function_call","name":"shell","arguments":{"command":"Get-Content C:\workspace\README.md"}}]}"#;
+        let envelope = decode_tool_envelope(payload).unwrap();
+        assert_eq!(envelope.calls.len(), 1);
+    }
+
+    #[test]
+    fn tool_envelope_repairs_unescaped_inner_quotes_and_newlines() {
+        let payload = "{\"calls\":[{\"type\":\"function_call\",\"name\":\"shell\",\"arguments\":{\"command\":\"Get-Content \".rootrelay/file.txt\"\nWrite-Output done\"}}]}";
+        let envelope = decode_tool_envelope(payload).unwrap();
+        assert_eq!(envelope.calls.len(), 1);
+        match &envelope.calls[0] {
+            BrowserToolEnvelopeCall::Function { arguments, .. } => {
+                assert_eq!(
+                    arguments.get("command").and_then(Value::as_str),
+                    Some("Get-Content \".rootrelay/file.txt\"\nWrite-Output done")
+                );
+            }
+            _ => panic!("expected function call"),
+        }
+    }
+
+    #[test]
+    fn tool_envelope_recovers_raw_custom_input_with_unescaped_quotes() {
+        let payload = r#"{"calls":[{"type":"custom_tool_call","namespace":"functions","name":"exec","input":"const r = await tools.exec_command({cmd:"Get-Content -Raw '.rootrelay/file.txt'",workdir:"C:/workspace"}); text(r.output);"}]}"#;
+        let envelope = decode_tool_envelope(payload).unwrap();
+        assert_eq!(envelope.calls.len(), 1);
+        match &envelope.calls[0] {
+            BrowserToolEnvelopeCall::Custom {
+                namespace,
+                name,
+                input,
+            } => {
+                assert_eq!(namespace.as_deref(), Some("functions"));
+                assert_eq!(name, "exec");
+                assert_eq!(
+                    input.as_str(),
+                    Some(
+                        r#"const r = await tools.exec_command({cmd:"Get-Content -Raw '.rootrelay/file.txt'",workdir:"C:/workspace"}); text(r.output);"#
+                    )
+                );
+            }
+            _ => panic!("expected custom tool call"),
+        }
     }
 }

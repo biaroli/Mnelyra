@@ -23,7 +23,6 @@
       && $mcpRuntimeStates[$activeWorkspaceState.workspaceId] === "running",
   );
   const connectionFlowing = $derived(mcpReady && publicRouteReady);
-  const webModelTunnelRequired = $derived(webModels?.mode === "full");
 
   async function refresh() {
     try {
@@ -55,20 +54,17 @@
     }
   }
 
-  async function recoverWebModels() {
+  async function startWebModels() {
     if (busy) return;
     busy = true;
-    const installingRoute = !webModels?.routeInstalled;
     try {
       webModels = await startWebModelBridge();
-      showToast(installingRoute
-        ? (zh ? "网页模型路由已安装。新建一个 Codex 对话即可使用。" : "Web-model routing is installed. Start a new Codex conversation to use it.")
-        : (zh ? "网页模型接入已恢复。" : "Web model access is ready."), {
-        title: installingRoute ? (zh ? "已安装到 Codex" : "Installed in Codex") : (zh ? "网页模型已就绪" : "Web models ready"),
+      showToast(zh ? "网页模型已启动。新建一个 Codex 对话即可使用。" : "Web Models started. Open a new Codex conversation to use them.", {
+        title: zh ? "网页模型已就绪" : "Web Models ready",
         kind: "success",
       });
     } catch (error) {
-      showToast(String(error), { title: zh ? "网页模型恢复失败" : "Failed to recover web models", kind: "error", duration: 11000 });
+      showToast(String(error), { title: zh ? "网页模型启动失败" : "Failed to start Web Models", kind: "error", duration: 11000 });
       webModels = await getWebModelBridgeStatus().catch(() => webModels);
     } finally {
       busy = false;
@@ -126,7 +122,7 @@
         <div class="mn-panel-cap">
           <div><span>MNELYRA</span><strong>{zh ? "网页模型接入" : "Web model bridge"}</strong></div>
           <b class:online={webModels?.ready}>
-            {webModels?.ready ? (webModels.browserBusy ? (zh ? "任务中" : "BUSY") : (zh ? "已接入" : "READY")) : (webModels?.routeInstalled ? (zh ? "待恢复" : "RECOVER") : (zh ? "未接入" : "NOT CONNECTED"))}
+            {webModels?.ready ? (webModels.browserBusy ? (zh ? "任务中" : "BUSY") : (zh ? "已接入" : "READY")) : (zh ? "未启动" : "STOPPED")}
           </b>
         </div>
 
@@ -144,9 +140,6 @@
           <div class:ok={Boolean(webModels?.browserReady)}>
             <i></i><span>{zh ? "ChatGPT 浏览器" : "ChatGPT browser"}</span><b>{webModels?.browserBusy ? (zh ? "任务中" : "BUSY") : webModels?.browserReady ? (zh ? "已就绪" : "READY") : (zh ? "未就绪" : "DOWN")}</b>
           </div>
-          <div class:ok={Boolean(!webModelTunnelRequired || webModels?.tunnelReady)}>
-            <i></i><span>OpenAI Tunnel</span><b>{!webModelTunnelRequired ? (zh ? "无需" : "N/A") : webModels?.tunnelReady ? (zh ? "已就绪" : "READY") : (zh ? "未就绪" : "DOWN")}</b>
-          </div>
         </div>
 
         <div class="mn-tunnel-live-row mn-codex-status-row">
@@ -162,24 +155,21 @@
                     {zh ? "已接入 Codex" : "Connected to Codex"}
                   {/if}
                 {:else if webModels?.routeInstalled && webModels?.routeActive}
-                  {zh ? "Codex 路由已安装，但网页模型运行时未就绪。" : "The Codex route is installed, but the Web-model runtime is not ready."}
+                  {zh ? "Codex 路由存在，但网页模型运行时未就绪。" : "The Codex route exists, but the Web-model runtime is not ready."}
                 {:else if webModels?.browserReady}
-                  {zh ? "ChatGPT 会话已就绪，Codex 路由尚未安装。" : "ChatGPT session ready; Codex routing is not installed yet."}
+                  {zh ? "ChatGPT 会话已就绪，点击启动接入 Codex。" : "ChatGPT session ready; click Start to connect Codex."}
                 {:else if webModels?.browserRunning}
                   {zh ? "请在 Mnelyra 的 ChatGPT 窗口完成登录。" : "Finish signing in from Mnelyra's ChatGPT window."}
                 {:else}
                   {zh ? "网页模型尚未启动。" : "Web Models have not been started."}
                 {/if}
               </span>
-              {#if webModels?.mode}
-                <small>{webModels.mode.toUpperCase()}</small>
-              {/if}
             </div>
           </div>
           {#if webModels?.ready}
             <button class="mn-mini-action" type="button" disabled={busy || webModels.browserBusy} onclick={() => void disconnectWebModels()}><Unplug size={12} /> {zh ? "断开" : "Disconnect"}</button>
           {:else if webModels?.codexDetected}
-            <button class="mn-mini-action primary" type="button" disabled={busy} onclick={() => void recoverWebModels()}><Play size={12} /> {webModels?.routeInstalled ? (zh ? "恢复" : "Recover") : (zh ? "安装到 Codex" : "Install in Codex")}</button>
+            <button class="mn-mini-action primary" type="button" disabled={busy} onclick={() => void startWebModels()}><Play size={12} /> {zh ? "启动" : "Start"}</button>
           {/if}
         </div>
 

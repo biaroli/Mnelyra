@@ -36,8 +36,6 @@ pub struct WebModelBridgeStatus {
     pub browser_ready: bool,
     pub browser_busy: bool,
     pub proxy_ready: bool,
-    pub mode: String,
-    pub tunnel_ready: bool,
     pub ready: bool,
     pub detail: String,
 }
@@ -143,14 +141,11 @@ fn browser_window(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(BROWSER_LABEL)
 }
 
-fn ensure_browser_window(app: &AppHandle) -> AppResult<WebviewWindow> {
+fn create_browser_window(app: &AppHandle, proxy_server: Option<&str>) -> AppResult<WebviewWindow> {
     if BROWSER_CLOSING.load(Ordering::Acquire) {
         return Err(AppError::Message(
             "Mnelyra ChatGPT window is closing".into(),
         ));
-    }
-    if let Some(window) = browser_window(app) {
-        return Ok(window);
     }
 
     let url = CHATGPT_TEMPORARY_URL
@@ -159,7 +154,7 @@ fn ensure_browser_window(app: &AppHandle) -> AppResult<WebviewWindow> {
     let profile = browser_profile_dir(app)?;
     std::fs::create_dir_all(&profile)?;
 
-    let builder = WebviewWindowBuilder::new(app, BROWSER_LABEL, WebviewUrl::External(url))
+    let mut builder = WebviewWindowBuilder::new(app, BROWSER_LABEL, WebviewUrl::External(url))
         .title("Mnelyra · ChatGPT")
         // Keep the hidden browser on ChatGPT's full desktop composer layout.
         // Narrower widths can collapse the reasoning picker into compact UI,
@@ -169,13 +164,159 @@ fn ensure_browser_window(app: &AppHandle) -> AppResult<WebviewWindow> {
         .data_directory(profile)
         .visible(false);
     #[cfg(windows)]
-    let builder = builder.additional_browser_args(
+    {
+        builder = builder.additional_browser_args(
         "--disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded-windows --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion",
-    );
+        );
+    }
+    if let Some(proxy_server) = proxy_server {
+        let proxy_url = proxy_server.parse().map_err(|error| {
+            AppError::Message(format!("invalid Mnelyra Web Models proxy URL: {error}"))
+        })?;
+        builder = builder.proxy_url(proxy_url);
+    }
 
     builder.build().map_err(|error| {
         AppError::Message(format!("could not create Mnelyra ChatGPT window: {error}"))
     })
+}
+
+fn ensure_browser_window(app: &AppHandle) -> AppResult<WebviewWindow> {
+    if let Some(window) = browser_window(app) {
+        return Ok(window);
+    }
+    create_browser_window(app, None)
+}
+
+#[cfg(windows)]
+fn parse_loopback_proxy_server(raw: &str) -> Option<String> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+
+    let selected = if raw.contains(';') {
+        let mut https = None;
+        let mut http = None;
+        let mut socks = None;
+        for segment in raw
+            .split(';')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            let Some((kind, endpoint)) = segment.split_once('=') else {
+                continue;
+            };
+            match kind.trim().to_ascii_lowercase().as_str() {
+                "https" => https = Some(endpoint.trim()),
+                "http" => http = Some(endpoint.trim()),
+                "socks" | "socks5" => socks = Some(endpoint.trim()),
+                _ => {}
+            }
+        }
+        https.or(http).or(socks)?
+    } else {
+        raw
+    };
+
+    let selected = selected
+        .trim()
+        .trim_start_matches("http://")
+        .trim_start_matches("https://")
+        .trim_start_matches("socks5://")
+        .trim_start_matches("socks://");
+
+    let (host, port_text) = if let Some(rest) = selected.strip_prefix('[') {
+        let (host, port) = rest.split_once("]:")?;
+        (format!("[{host}]"), port)
+    } else {
+        let (host, port) = selected.rsplit_once(':')?;
+        (host.to_string(), port)
+    };
+    let normalized_host = host.trim().to_ascii_lowercase();
+    if !matches!(
+        normalized_host.as_str(),
+        "127.0.0.1" | "localhost" | "[::1]" | "::1"
+    ) {
+        return None;
+    }
+
+    let port: u16 = port_text.trim().parse().ok()?;
+    let socket = if matches!(normalized_host.as_str(), "[::1]" | "::1") {
+        std::net::SocketAddr::new(std::net::IpAddr::V6(std::net::Ipv6Addr::LOCALHOST), port)
+    } else {
+        std::net::SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), port)
+    };
+    if std::net::TcpStream::connect_timeout(&socket, Duration::from_millis(350)).is_err() {
+        return None;
+    }
+
+    let url_host = if matches!(normalized_host.as_str(), "[::1]" | "::1") {
+        "[::1]"
+    } else if normalized_host == "localhost" {
+        "localhost"
+    } else {
+        "127.0.0.1"
+    };
+    Some(format!("http://{url_host}:{port}"))
+}
+
+#[cfg(windows)]
+fn configured_loopback_proxy_server() -> Option<String> {
+    let output = std::process::Command::new("reg.exe")
+        .args([
+            "query",
+            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+            "/v",
+            "ProxyServer",
+        ])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let line = text.lines().find(|line| line.contains("ProxyServer"))?;
+    parse_loopback_proxy_server(line.split_whitespace().last()?)
+}
+
+#[cfg(windows)]
+async fn recreate_browser_with_loopback_proxy(
+    app: &AppHandle,
+    window: &WebviewWindow,
+) -> AppResult<Option<WebviewWindow>> {
+    let Some(proxy_server) = configured_loopback_proxy_server() else {
+        return Ok(None);
+    };
+    eprintln!("[web-models] retrying managed ChatGPT WebView through detected loopback proxy");
+    if !wait_for_devtools_idle(Duration::from_secs(2)).await {
+        return Err(AppError::Message(
+            "Mnelyra ChatGPT WebView is still busy while preparing local proxy recovery".into(),
+        ));
+    }
+    let _ = window.destroy();
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while browser_window(app).is_some() && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    if browser_window(app).is_some() {
+        return Err(AppError::Message(
+            "could not recreate the Mnelyra ChatGPT window for local proxy recovery".into(),
+        ));
+    }
+    let replacement = create_browser_window(app, Some(&proxy_server))?;
+    wait_for_chatgpt_document(&replacement).await?;
+    Ok(Some(replacement))
+}
+
+#[cfg(not(windows))]
+async fn recreate_browser_with_loopback_proxy(
+    _app: &AppHandle,
+    _window: &WebviewWindow,
+) -> AppResult<Option<WebviewWindow>> {
+    Ok(None)
 }
 
 fn is_chatgpt_url(window: &WebviewWindow) -> bool {
@@ -187,7 +328,31 @@ fn is_chatgpt_url(window: &WebviewWindow) -> bool {
 
 async fn wait_for_chatgpt_document(window: &WebviewWindow) -> AppResult<()> {
     let deadline = tokio::time::Instant::now() + BROWSER_READY_TIMEOUT;
+    let mut navigation_retries = 0_u8;
     while tokio::time::Instant::now() < deadline {
+        let current_url = window.url().ok();
+        if current_url
+            .as_ref()
+            .is_some_and(|url| url.as_str().starts_with("chrome-error://"))
+        {
+            if navigation_retries < 2 {
+                navigation_retries += 1;
+                let url = CHATGPT_TEMPORARY_URL.parse().map_err(|error| {
+                    AppError::Message(format!("invalid ChatGPT recovery URL: {error}"))
+                })?;
+                window.navigate(url).map_err(|error| {
+                    AppError::Message(format!(
+                        "could not retry the Mnelyra ChatGPT navigation after a WebView load error: {error}"
+                    ))
+                })?;
+                tokio::time::sleep(Duration::from_millis(750)).await;
+                continue;
+            }
+            return Err(AppError::Message(
+                "Mnelyra ChatGPT WebView could not reach ChatGPT after navigation retries".into(),
+            ));
+        }
+
         if is_chatgpt_url(window) {
             let expression =
                 r#"(() => ({ readyState: document.readyState, url: location.href }))()"#;
@@ -272,7 +437,7 @@ async fn wait_for_sign_in(
     while tokio::time::Instant::now() < deadline {
         if sign_in_window_closed(app, window) {
             return Err(AppError::Message(
-                "The Mnelyra ChatGPT sign-in window was closed. Click Install in Codex / Recover again to reopen it"
+                "The Mnelyra ChatGPT sign-in window was closed. Click Start again to reopen it"
                     .into(),
             ));
         }
@@ -280,7 +445,7 @@ async fn wait_for_sign_in(
             probe = probe_browser_session(window) => probe,
             _ = wait_for_sign_in_window_close(app, window) => {
                 return Err(AppError::Message(
-                    "The Mnelyra ChatGPT sign-in window was closed. Click Install in Codex / Recover again to reopen it"
+                    "The Mnelyra ChatGPT sign-in window was closed. Click Start again to reopen it"
                         .into(),
                 ));
             }
@@ -375,32 +540,63 @@ pub async fn status(app: &AppHandle) -> AppResult<WebModelBridgeStatus> {
         browser_ready,
         browser_busy,
         proxy_ready,
-        mode: if draining {
-            "native-drain".into()
-        } else {
-            "browser-only".into()
-        },
-        tunnel_ready: true,
         ready,
         detail,
     })
 }
 
-async fn start_browser_only_impl(
+async fn start_web_models_impl(
     app: &AppHandle,
     allow_interactive_sign_in: bool,
 ) -> AppResult<WebModelBridgeStatus> {
     let _busy = BusyGuard::acquire()?;
     crate::codex::discover_executable().map_err(AppError::Message)?;
 
-    let window = ensure_browser_window(app)?;
-    wait_for_chatgpt_document(&window).await?;
-    let probe = probe_browser_session(&window).await?;
+    let mut window = ensure_browser_window(app)?;
+    let mut proxy_recovered = false;
+    if let Err(direct_error) = wait_for_chatgpt_document(&window).await {
+        match recreate_browser_with_loopback_proxy(app, &window).await {
+            Ok(Some(replacement)) => {
+                window = replacement;
+                proxy_recovered = true;
+            }
+            Ok(None) => return Err(direct_error),
+            Err(recovery_error) => {
+                return Err(AppError::Message(format!(
+                    "Mnelyra ChatGPT direct navigation failed: {direct_error}; local proxy recovery also failed: {recovery_error}"
+                )));
+            }
+        }
+    }
+    let mut probe = probe_browser_session(&window).await?;
+    if probe.url.starts_with("chrome-error://") && !proxy_recovered {
+        if let Some(replacement) = recreate_browser_with_loopback_proxy(app, &window).await? {
+            window = replacement;
+            proxy_recovered = true;
+            probe = probe_browser_session(&window).await?;
+        }
+    }
     #[cfg(debug_assertions)]
     eprintln!(
-        "[web-models] browser probe authenticated={} composer_ready={} temporary={} url={}",
-        probe.authenticated, probe.composer_ready, probe.temporary, probe.url
+        "[web-models] browser probe authenticated={} composer_ready={} temporary={} proxy_recovered={} url={}",
+        probe.authenticated, probe.composer_ready, probe.temporary, proxy_recovered, probe.url
     );
+    #[cfg(debug_assertions)]
+    if probe.url.starts_with("chrome-error://") {
+        let detail = evaluate_browser_value(
+            &window,
+            r#"(() => ({ title: document.title, text: (document.body?.innerText || '').slice(0, 1200) }))()"#,
+        )
+        .await
+        .unwrap_or(Value::Null);
+        eprintln!("[web-models] browser error page detail={detail}");
+    }
+    if probe.url.starts_with("chrome-error://") {
+        return Err(AppError::Message(
+            "Mnelyra ChatGPT WebView could not reach ChatGPT through the available network routes"
+                .into(),
+        ));
+    }
     if !(probe.authenticated && probe.composer_ready && probe.temporary) {
         if !allow_interactive_sign_in {
             return Err(AppError::Message(
@@ -428,8 +624,8 @@ async fn start_browser_only_impl(
     status(app).await
 }
 
-pub async fn start_browser_only(app: &AppHandle) -> AppResult<WebModelBridgeStatus> {
-    start_browser_only_impl(app, true).await
+pub async fn start_web_models(app: &AppHandle) -> AppResult<WebModelBridgeStatus> {
+    start_web_models_impl(app, true).await
 }
 
 #[cfg(debug_assertions)]
@@ -521,6 +717,7 @@ async fn debug_codex_exec_probe(
     model: &str,
     effort: &str,
     streaming_probe: bool,
+    tool_probe: bool,
 ) -> AppResult<String> {
     let executable = crate::codex::discover_executable().map_err(AppError::Message)?;
     let cwd = std::env::current_dir()?;
@@ -528,11 +725,31 @@ async fn debug_codex_exec_probe(
         "mnelyra-web-models-e2e-{}.txt",
         uuid::Uuid::new_v4().simple()
     ));
+    let tool_probe_file = tool_probe.then(|| {
+        let marker = format!("MNELYRA_CODEX_TOOL_E2E_{}", uuid::Uuid::new_v4().simple());
+        let relative = format!(
+            ".rootrelay/web-models-tool-e2e-{}.txt",
+            uuid::Uuid::new_v4().simple()
+        );
+        let path = cwd.join(relative.replace('/', std::path::MAIN_SEPARATOR_STR));
+        (path, relative, marker)
+    });
+    if let Some((path, _, marker)) = tool_probe_file.as_ref() {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(path, format!("{marker}\n"))?;
+    }
+
     let mut command = tokio::process::Command::new(&executable);
-    let prompt = if streaming_probe {
-        "Write a structured Markdown answer of at least 1200 characters with one title, at least four prose paragraphs, and one bullet list containing at least four items. Do not use tools. Keep the answer substantive enough to observe streaming and end with the exact marker MNELYRA_CODEX_STREAM_E2E_OK."
+    let prompt = if let Some((_, relative, marker)) = tool_probe_file.as_ref() {
+        format!(
+            "Use an available Codex local read-only tool to read the file `{relative}` relative to the current workdir. You MUST actually call a tool and use its returned contents; do not guess or infer the file. Prefer forward slashes in tool arguments. After the tool result is returned, reply with exactly the file contents, which must be the marker {marker}, and nothing else."
+        )
+    } else if streaming_probe {
+        "Write a structured Markdown answer of at least 1200 characters with one title, at least four prose paragraphs, and one bullet list containing at least four items. Do not use tools. Keep the answer substantive enough to observe streaming and end with the exact marker MNELYRA_CODEX_STREAM_E2E_OK.".to_string()
     } else {
-        "Reply with exactly: MNELYRA_CODEX_E2E_OK. Do not use tools."
+        "Reply with exactly: MNELYRA_CODEX_E2E_OK. Do not use tools.".to_string()
     };
     command
         .arg("-c")
@@ -550,7 +767,7 @@ async fn debug_codex_exec_probe(
         .arg(&cwd)
         .arg("--output-last-message")
         .arg(&output_file)
-        .arg(prompt)
+        .arg(&prompt)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
@@ -561,6 +778,9 @@ async fn debug_codex_exec_probe(
         .map_err(|error| AppError::Message(format!("Could not start Codex E2E probe: {error}")))?;
     let final_text = std::fs::read_to_string(&output_file).unwrap_or_default();
     let _ = std::fs::remove_file(&output_file);
+    if let Some((path, _, _)) = tool_probe_file.as_ref() {
+        let _ = std::fs::remove_file(path);
+    }
     if !output.status.success() {
         return Err(AppError::Message(format!(
             "Codex Web Models E2E probe exited with {}: {}",
@@ -568,7 +788,9 @@ async fn debug_codex_exec_probe(
             String::from_utf8_lossy(&output.stderr).trim()
         )));
     }
-    let valid = if streaming_probe {
+    let valid = if let Some((_, _, marker)) = tool_probe_file.as_ref() {
+        final_text.trim() == marker
+    } else if streaming_probe {
         final_text.chars().count() >= 1200
             && final_text
                 .trim_end()
@@ -587,7 +809,7 @@ async fn debug_codex_exec_probe(
 }
 
 /// Debug-only opt-in smoke test. Normal application startup never calls Web
-/// Models unless the user clicks Install/Recover. Developers may set
+/// Models unless the user clicks Start. Developers may set
 /// `MNELYRA_WEB_MODELS_SELFTEST=1` for one process to exercise the real browser
 /// bridge and a real non-interactive Codex CLI request end-to-end.
 #[cfg(debug_assertions)]
@@ -601,6 +823,7 @@ pub(crate) fn debug_self_test_enabled() -> bool {
                     | "--web-models-selftest-medium"
                     | "--web-models-selftest-high"
                     | "--web-models-selftest-stream"
+                    | "--web-models-selftest-tool"
                     | "--web-models-selftest-hold"
             )
         })
@@ -633,6 +856,11 @@ fn debug_self_test_streaming() -> bool {
 }
 
 #[cfg(debug_assertions)]
+fn debug_self_test_tool() -> bool {
+    std::env::args().any(|arg| arg == "--web-models-selftest-tool")
+}
+
+#[cfg(debug_assertions)]
 fn debug_self_test_hold() -> bool {
     std::env::args().any(|arg| arg == "--web-models-selftest-hold")
 }
@@ -645,13 +873,14 @@ pub(crate) fn schedule_debug_self_test(app: AppHandle) {
     let model = debug_self_test_model();
     let effort = debug_self_test_effort();
     let streaming_probe = debug_self_test_streaming();
+    let tool_probe = debug_self_test_tool();
     let hold_only = debug_self_test_hold();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_millis(800)).await;
         let started = std::time::Instant::now();
         eprintln!("[web-models selftest] START model={model} effort={effort}");
         let result = async {
-            let status = start_browser_only_impl(&app, false).await?;
+            let status = start_web_models_impl(&app, false).await?;
             if !status.ready {
                 return Err(AppError::Message(format!(
                     "Web Models did not become ready: {}",
@@ -667,15 +896,17 @@ pub(crate) fn schedule_debug_self_test(app: AppHandle) {
                 tokio::time::sleep(Duration::from_secs(600)).await;
                 return AppResult::Ok(());
             }
-            let direct_started = std::time::Instant::now();
-            let direct = debug_direct_responses_probe(model, effort, streaming_probe).await?;
-            eprintln!(
-                "[web-models selftest] direct_pass_ms={} text={:?}",
-                direct_started.elapsed().as_millis(),
-                direct.trim()
-            );
+            if !tool_probe {
+                let direct_started = std::time::Instant::now();
+                let direct = debug_direct_responses_probe(model, effort, streaming_probe).await?;
+                eprintln!(
+                    "[web-models selftest] direct_pass_ms={} text={:?}",
+                    direct_started.elapsed().as_millis(),
+                    direct.trim()
+                );
+            }
             let codex_started = std::time::Instant::now();
-            let codex = debug_codex_exec_probe(model, effort, streaming_probe).await?;
+            let codex = debug_codex_exec_probe(model, effort, streaming_probe, tool_probe).await?;
             eprintln!(
                 "[web-models selftest] codex_pass_ms={} text={:?}",
                 codex_started.elapsed().as_millis(),
@@ -685,7 +916,7 @@ pub(crate) fn schedule_debug_self_test(app: AppHandle) {
         }
         .await;
 
-        let stop_result = stop_browser_only(&app).await;
+        let stop_result = stop_web_models(&app).await;
         match result {
             Ok(()) => eprintln!(
                 "[web-models selftest] PASS total_ms={}",
@@ -719,7 +950,7 @@ pub fn restore_native_route_only(app: &AppHandle) -> AppResult<()> {
     Ok(())
 }
 
-pub async fn stop_browser_only(app: &AppHandle) -> AppResult<WebModelBridgeStatus> {
+pub async fn stop_web_models(app: &AppHandle) -> AppResult<WebModelBridgeStatus> {
     let _busy = BusyGuard::acquire()?;
     let _closing = BrowserClosingGuard::acquire();
     BROWSER_READY_CACHED.store(false, Ordering::Release);
@@ -968,5 +1199,24 @@ mod tests {
             r#"{"exceptionDetails":{"text":"boom"},"result":{"type":"undefined"}}"#
         )
         .is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn accepts_only_live_loopback_proxy_servers() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind loopback test port");
+        let port = listener.local_addr().expect("local addr").port();
+        assert_eq!(
+            parse_loopback_proxy_server(&format!("127.0.0.1:{port}")),
+            Some(format!("http://127.0.0.1:{port}"))
+        );
+        assert_eq!(
+            parse_loopback_proxy_server(&format!("http=127.0.0.1:{port};https=127.0.0.1:{port}")),
+            Some(format!("http://127.0.0.1:{port}"))
+        );
+        assert_eq!(
+            parse_loopback_proxy_server(&format!("example.com:{port}")),
+            None
+        );
     }
 }

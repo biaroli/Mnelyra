@@ -109,7 +109,7 @@ OpenAI 的当前说明见 [Developer mode and MCP apps in ChatGPT](https://help.
 
 ## 在 Codex 中使用 ChatGPT Web 推理
 
-打开 **连接 → 网页模型接入**，点击 **安装到 Codex**。第一次使用时，Mnelyra 会打开自己管理的 ChatGPT 窗口让你完成登录；登录完成后，这个会话由 Mnelyra 单独维护，不会占用你平常使用的浏览器窗口。
+打开 **连接 → 网页模型接入**，点击 **启动**。第一次使用时，Mnelyra 会打开自己管理的 ChatGPT 窗口让你完成登录；登录完成后，这个会话由 Mnelyra 单独维护，不会占用你平常使用的浏览器窗口。
 
 桥接不会新增一组自定义模型。Codex 仍然选择原生的 `GPT-5.6 Sol`，只需要照常切换推理档位：
 
@@ -119,13 +119,13 @@ OpenAI 的当前说明见 [Developer mode and MCP apps in ChatGPT](https://help.
 | Medium | Medium |
 | High | High |
 
-安装完成后，**新建一个 Codex 对话**，选择 `GPT-5.6 Sol` 和需要的推理档位即可。已经加载的旧对话会继续沿用创建时的通道，所以切换原生/Web 路由时，新建对话最干净。
+启动桥接后，**新建一个 Codex 对话**，选择 `GPT-5.6 Sol` 和需要的推理档位即可。已经加载的旧对话会继续沿用创建时的通道，所以切换原生/Web 路由时，新建对话最干净。
 
-需要恢复原生 Codex 时，在 Mnelyra 中点击 **断开**。Mnelyra 会还原之前的 Codex 配置，并在切换过程中避免已经加载的旧对话直接失去连接。这条网页模型路径不需要 OpenAI Tunnel ID，也不需要模型 API Key。
+模型推理由 ChatGPT Web 完成时，Codex 仍负责本地工具执行、审批、sandbox 和 MCP 工具；工具结果会回到网页模型继续下一轮，因此正常的 Codex 工具工作流可以继续使用。
+
+需要恢复原生 Codex 时，在 Mnelyra 中点击 **断开**。Mnelyra 会还原之前的 Codex 配置，并在切换过程中避免已经加载的旧对话直接失去连接。Web Models 不需要 OpenAI Tunnel ID，也不需要模型 API Key。
 
 网页模型能力取决于当前登录的 ChatGPT 账号以及 ChatGPT Web 本身，因此可用性可能随账号能力或网页 UI 更新而变化。
-
-如果还要使用 Mnelyra 的 **OpenAI Tunnel** 作为 Codex/MCP 工具回路，请在 Mnelyra 中配置 Tunnel ID 和 OpenAI API Key。这把 Key 只用于 Tunnel 认证，Mnelyra 不会拿它做模型推理，因此不会消耗模型 API token，也不会扣模型 API credits。
 
 ### Codex 上下文与自动总结
 

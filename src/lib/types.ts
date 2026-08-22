@@ -67,7 +67,6 @@ export interface OpenAiConnectorSettings {
 
 export interface WebModelBridgeStatus {
   codexDetected: boolean;
-  mode: string;
   routeInstalled: boolean;
   routeActive: boolean;
   routeUrl: string;
@@ -75,7 +74,6 @@ export interface WebModelBridgeStatus {
   browserReady: boolean;
   browserBusy: boolean;
   proxyReady: boolean;
-  tunnelReady: boolean;
   ready: boolean;
   detail: string;
 }
